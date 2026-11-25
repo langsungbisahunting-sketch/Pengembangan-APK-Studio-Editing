@@ -21,18 +21,39 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.example.model.BlendModePreset
+import com.example.model.ImageCropRect
 import com.example.model.ImageEditorDocument
+import com.example.model.ImageFloodFillOp
+import com.example.model.ImageShapeLayer
+import com.example.model.PaintBrushType
+import com.example.model.PaintShapeType
 import com.example.model.TextFontStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.ArrayDeque
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.random.Random
 
 object ImageEditorRenderer {
+
+    fun createBlankCanvasBitmap(
+        width: Int = 960,
+        height: Int = 960,
+        bgColorHex: Long = 0xFFFFFFFFL
+    ): Bitmap {
+        return Bitmap.createBitmap(width.coerceIn(256, 2048), height.coerceIn(256, 2048), Bitmap.Config.ARGB_8888).apply {
+            eraseColor(bgColorHex.toInt())
+        }
+    }
 
     suspend fun loadPreviewBitmap(
         context: Context,
@@ -62,6 +83,122 @@ object ImageEditorRenderer {
         } catch (_: Throwable) {
             null
         }
+    }
+
+    fun samplePixelColor(bitmap: Bitmap, normX: Float, normY: Float): Long {
+        val x = (normX * bitmap.width).toInt().coerceIn(0, (bitmap.width - 1).coerceAtLeast(0))
+        val y = (normY * bitmap.height).toInt().coerceIn(0, (bitmap.height - 1).coerceAtLeast(0))
+        val px = bitmap.getPixel(x, y)
+        return px.toLong() and 0xFFFFFFFFL
+    }
+
+    /**
+     * Iterative BFS flood-fill (Ember Cat MS Paint) safe against StackOverflow on any resolution.
+     */
+    fun applyFloodFill(
+        source: Bitmap,
+        normX: Float,
+        normY: Float,
+        replacementColor: Int,
+        tolerance: Int = 38
+    ): Bitmap {
+        val w = source.width
+        val h = source.height
+        if (w <= 0 || h <= 0) return source
+        val startX = (normX * w).toInt().coerceIn(0, w - 1)
+        val startY = (normY * h).toInt().coerceIn(0, h - 1)
+
+        val pixels = IntArray(w * h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
+        val targetColor = pixels[startY * w + startX]
+        if (targetColor == replacementColor) {
+            return source.copy(Bitmap.Config.ARGB_8888, true)
+        }
+
+        val tA = Color.alpha(targetColor)
+        val tR = Color.red(targetColor)
+        val tG = Color.green(targetColor)
+        val tB = Color.blue(targetColor)
+
+        fun matches(px: Int): Boolean {
+            return abs(Color.alpha(px) - tA) <= tolerance &&
+                abs(Color.red(px) - tR) <= tolerance &&
+                abs(Color.green(px) - tG) <= tolerance &&
+                abs(Color.blue(px) - tB) <= tolerance
+        }
+
+        val visited = BooleanArray(w * h)
+        val queue = ArrayDeque<Int>(4096)
+        val startIdx = startY * w + startX
+        queue.add(startIdx)
+        visited[startIdx] = true
+
+        while (queue.isNotEmpty()) {
+            val idx = queue.removeFirst()
+            pixels[idx] = replacementColor
+            val x = idx % w
+            val y = idx / w
+
+            if (x > 0) {
+                val n = idx - 1
+                if (!visited[n] && matches(pixels[n])) {
+                    visited[n] = true
+                    queue.addLast(n)
+                }
+            }
+            if (x < w - 1) {
+                val n = idx + 1
+                if (!visited[n] && matches(pixels[n])) {
+                    visited[n] = true
+                    queue.addLast(n)
+                }
+            }
+            if (y > 0) {
+                val n = idx - w
+                if (!visited[n] && matches(pixels[n])) {
+                    visited[n] = true
+                    queue.addLast(n)
+                }
+            }
+            if (y < h - 1) {
+                val n = idx + w
+                if (!visited[n] && matches(pixels[n])) {
+                    visited[n] = true
+                    queue.addLast(n)
+                }
+            }
+        }
+
+        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels, 0, w, 0, 0, w, h)
+        }
+    }
+
+    fun buildPreviewWorkingBitmap(
+        rawBase: Bitmap,
+        document: ImageEditorDocument
+    ): Bitmap {
+        var bmp = transformBitmap(
+            raw = rawBase,
+            rotationDegrees = document.rotationDegrees,
+            flipH = document.flipHorizontal,
+            flipV = document.flipVertical,
+            appliedCrop = document.appliedCropRect,
+            cropRatio = document.cropRatio.ratio
+        )
+        document.floodFills.forEach { fill: ImageFloodFillOp ->
+            bmp = applyFloodFill(
+                source = bmp,
+                normX = fill.xFraction,
+                normY = fill.yFraction,
+                replacementColor = fill.colorHex.toInt(),
+                tolerance = fill.tolerance
+            )
+        }
+        if (document.removeBackground) {
+            bmp = applyBackgroundCutout(bmp, document.bgTolerance)
+        }
+        return bmp
     }
 
     /**
@@ -125,22 +262,17 @@ object ImageEditorRenderer {
         context: Context,
         document: ImageEditorDocument
     ): File? = withContext(Dispatchers.IO) {
-        val uriString = document.sourceUriString ?: return@withContext null
-        val raw = loadPreviewBitmap(context, Uri.parse(uriString), maxDim = 1440) ?: return@withContext null
-
-        val transformed = transformBitmap(
-            raw = raw,
-            rotationDegrees = document.rotationDegrees,
-            flipH = document.flipHorizontal,
-            flipV = document.flipVertical,
-            cropRatio = document.cropRatio.ratio
-        )
-
-        val baseBitmap = if (document.removeBackground) {
-            applyBackgroundCutout(transformed, document.bgTolerance)
+        val raw = if (document.sourceUriString != null) {
+            loadPreviewBitmap(context, Uri.parse(document.sourceUriString), maxDim = 1440)
         } else {
-            transformed
-        }
+            createBlankCanvasBitmap(
+                width = document.blankCanvasWidth,
+                height = document.blankCanvasHeight,
+                bgColorHex = document.canvasBaseColorHex
+            )
+        } ?: return@withContext null
+
+        val baseBitmap = buildPreviewWorkingBitmap(raw, document)
 
         val outW = baseBitmap.width
         val outH = baseBitmap.height
@@ -171,7 +303,38 @@ object ImageEditorRenderer {
             canvas.drawRect(0f, 0f, outW.toFloat(), outH.toFloat(), vignettePaint)
         }
 
-        // Finger Brush Strokes
+        val scaleUnit = min(outW, outH) / 360f
+
+        // Timpa Gambar (Overlay Images)
+        document.overlayImages.forEach { overlay ->
+            val ovBmp = loadPreviewBitmap(context, Uri.parse(overlay.uriString), maxDim = 960) ?: return@forEach
+            canvas.save()
+            canvas.translate(overlay.xFraction * outW, overlay.yFraction * outH)
+            canvas.rotate(overlay.rotationDeg)
+            val targetW = outW * overlay.scale.coerceIn(0.12f, 1.8f)
+            val ratio = ovBmp.height.toFloat() / ovBmp.width.coerceAtLeast(1).toFloat()
+            val targetH = targetW * ratio
+            if (overlay.flipHorizontal) {
+                canvas.scale(-1f, 1f)
+            }
+            val ovPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                alpha = (overlay.opacity.coerceIn(0.05f, 1f) * 255).roundToInt()
+                val porterDuff = when (overlay.blendMode) {
+                    BlendModePreset.MULTIPLY -> PorterDuff.Mode.MULTIPLY
+                    BlendModePreset.SCREEN -> PorterDuff.Mode.SCREEN
+                    BlendModePreset.OVERLAY -> PorterDuff.Mode.OVERLAY
+                    BlendModePreset.LIGHTEN -> PorterDuff.Mode.LIGHTEN
+                    BlendModePreset.DARKEN -> PorterDuff.Mode.DARKEN
+                    BlendModePreset.NORMAL -> null
+                }
+                if (porterDuff != null) xfermode = PorterDuffXfermode(porterDuff)
+            }
+            val dst = RectF(-targetW / 2f, -targetH / 2f, targetW / 2f, targetH / 2f)
+            canvas.drawBitmap(ovBmp, null, dst, ovPaint)
+            canvas.restore()
+        }
+
+        // Paint Strokes (Pencil, Brush, Marker, Airbrush, Eraser)
         val strokeLayer = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
         val strokeCanvas = Canvas(strokeLayer)
         val brushPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -179,26 +342,72 @@ object ImageEditorRenderer {
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
-        val scaleUnit = min(outW, outH) / 360f
         document.strokes.forEach { stroke ->
             if (stroke.points.size < 2) return@forEach
-            val path = Path()
-            stroke.points.forEachIndexed { idx, pt ->
-                val px = pt.x * outW
-                val py = pt.y * outH
-                if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
-            }
-            if (stroke.isEraser) {
+            if (stroke.isEraser || stroke.brushType == PaintBrushType.ERASER) {
+                val path = Path()
+                stroke.points.forEachIndexed { idx, pt ->
+                    val px = pt.x * outW
+                    val py = pt.y * outH
+                    if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
                 brushPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
                 brushPaint.color = Color.TRANSPARENT
+                brushPaint.alpha = 255
+                brushPaint.strokeWidth = stroke.strokeWidthDp * scaleUnit
+                strokeCanvas.drawPath(path, brushPaint)
+            } else if (stroke.brushType == PaintBrushType.AIRBRUSH) {
+                val sprayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.FILL
+                    color = stroke.colorHex.toInt()
+                    alpha = (stroke.alpha.coerceIn(0.15f, 1f) * 180).roundToInt()
+                }
+                val rng = Random(stroke.id.hashCode())
+                val radius = stroke.strokeWidthDp * scaleUnit * 1.4f
+                val dotRadius = (1.2f * scaleUnit).coerceAtLeast(1.5f)
+                stroke.points.forEach { pt ->
+                    val cx = pt.x * outW
+                    val cy = pt.y * outH
+                    repeat(14) {
+                        val angle = rng.nextFloat() * 6.28318f
+                        val dist = rng.nextFloat() * radius
+                        strokeCanvas.drawCircle(
+                            cx + cos(angle) * dist,
+                            cy + sin(angle) * dist,
+                            dotRadius,
+                            sprayPaint
+                        )
+                    }
+                }
             } else {
+                val path = Path()
+                stroke.points.forEachIndexed { idx, pt ->
+                    val px = pt.x * outW
+                    val py = pt.y * outH
+                    if (idx == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
                 brushPaint.xfermode = null
                 brushPaint.color = stroke.colorHex.toInt()
+                val effAlpha = when (stroke.brushType) {
+                    PaintBrushType.MARKER -> (stroke.alpha * 0.45f).coerceIn(0.12f, 0.7f)
+                    else -> stroke.alpha.coerceIn(0.1f, 1f)
+                }
+                brushPaint.alpha = (effAlpha * 255).roundToInt()
+                val widthFactor = when (stroke.brushType) {
+                    PaintBrushType.PENCIL -> 0.42f
+                    PaintBrushType.MARKER -> 1.7f
+                    else -> 1f
+                }
+                brushPaint.strokeWidth = (stroke.strokeWidthDp * widthFactor * scaleUnit).coerceAtLeast(1.5f)
+                strokeCanvas.drawPath(path, brushPaint)
             }
-            brushPaint.strokeWidth = stroke.strokeWidthDp * scaleUnit
-            strokeCanvas.drawPath(path, brushPaint)
         }
         canvas.drawBitmap(strokeLayer, 0f, 0f, null)
+
+        // MS Paint Geometric Shapes
+        document.shapes.forEach { shape ->
+            drawShapeOnAndroidCanvas(canvas, shape, outW.toFloat(), outH.toFloat(), scaleUnit)
+        }
 
         // Stickers & Comic Bubbles
         document.stickers.forEach { st ->
@@ -278,6 +487,88 @@ object ImageEditorRenderer {
         outFile
     }
 
+    private fun drawShapeOnAndroidCanvas(
+        canvas: Canvas,
+        shape: ImageShapeLayer,
+        w: Float,
+        h: Float,
+        scaleUnit: Float
+    ) {
+        val sx = shape.startX * w
+        val sy = shape.startY * h
+        val ex = shape.endX * w
+        val ey = shape.endY * h
+        val left = min(sx, ex)
+        val top = min(sy, ey)
+        val right = max(sx, ex)
+        val bottom = max(sy, ey)
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = shape.colorHex.toInt()
+            alpha = (shape.alpha.coerceIn(0.1f, 1f) * 255).roundToInt()
+            strokeWidth = shape.strokeWidthDp * scaleUnit
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            style = if (shape.filled && shape.shapeType != PaintShapeType.LINE && shape.shapeType != PaintShapeType.ARROW) {
+                Paint.Style.FILL
+            } else {
+                Paint.Style.STROKE
+            }
+        }
+
+        when (shape.shapeType) {
+            PaintShapeType.LINE -> canvas.drawLine(sx, sy, ex, ey, paint)
+            PaintShapeType.ARROW -> {
+                canvas.drawLine(sx, sy, ex, ey, paint)
+                val angle = atan2((ey - sy).toDouble(), (ex - sx).toDouble())
+                val headLen = (16f + shape.strokeWidthDp * 1.5f) * scaleUnit
+                val a1 = angle - Math.PI / 6.0
+                val a2 = angle + Math.PI / 6.0
+                canvas.drawLine(ex, ey, ex - (headLen * cos(a1)).toFloat(), ey - (headLen * sin(a1)).toFloat(), paint)
+                canvas.drawLine(ex, ey, ex - (headLen * cos(a2)).toFloat(), ey - (headLen * sin(a2)).toFloat(), paint)
+            }
+            PaintShapeType.RECTANGLE -> canvas.drawRect(left, top, right, bottom, paint)
+            PaintShapeType.OVAL -> canvas.drawOval(RectF(left, top, right, bottom), paint)
+            PaintShapeType.TRIANGLE -> {
+                val path = Path().apply {
+                    moveTo((left + right) / 2f, top)
+                    lineTo(right, bottom)
+                    lineTo(left, bottom)
+                    close()
+                }
+                canvas.drawPath(path, paint)
+            }
+            PaintShapeType.STAR -> {
+                val cx = (left + right) / 2f
+                val cy = (top + bottom) / 2f
+                val outerR = max(right - left, bottom - top) / 2f
+                val innerR = outerR * 0.42f
+                val path = Path()
+                for (i in 0 until 10) {
+                    val r = if (i % 2 == 0) outerR else innerR
+                    val rad = Math.toRadians(-90.0 + i * 36.0)
+                    val px = cx + (r * cos(rad)).toFloat()
+                    val py = cy + (r * sin(rad)).toFloat()
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                path.close()
+                canvas.drawPath(path, paint)
+            }
+            PaintShapeType.BUBBLE -> {
+                val bodyBottom = bottom - (bottom - top) * 0.22f
+                val rect = RectF(left, top, right, bodyBottom.coerceAtLeast(top + 8f))
+                canvas.drawRoundRect(rect, 18f * scaleUnit, 18f * scaleUnit, paint)
+                val tail = Path().apply {
+                    moveTo(left + (right - left) * 0.25f, bodyBottom)
+                    lineTo(left + (right - left) * 0.14f, bottom)
+                    lineTo(left + (right - left) * 0.42f, bodyBottom)
+                    close()
+                }
+                canvas.drawPath(tail, paint)
+            }
+        }
+    }
+
     suspend fun saveImageToGallery(context: Context, imageFile: File, title: String): Uri? =
         withContext(Dispatchers.IO) {
             if (!imageFile.exists()) return@withContext null
@@ -317,6 +608,7 @@ object ImageEditorRenderer {
         rotationDegrees: Int,
         flipH: Boolean,
         flipV: Boolean,
+        appliedCrop: ImageCropRect,
         cropRatio: Float?
     ): Bitmap {
         val m = Matrix().apply {
@@ -327,12 +619,20 @@ object ImageEditorRenderer {
             Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
         } else raw
 
-        if (cropRatio == null || cropRatio <= 0f) return rotated
+        val croppedFree = if (!appliedCrop.isFull) {
+            val cLeft = (appliedCrop.left * rotated.width).roundToInt().coerceIn(0, (rotated.width - 10).coerceAtLeast(0))
+            val cTop = (appliedCrop.top * rotated.height).roundToInt().coerceIn(0, (rotated.height - 10).coerceAtLeast(0))
+            val cRight = (appliedCrop.right * rotated.width).roundToInt().coerceIn(cLeft + 8, rotated.width)
+            val cBottom = (appliedCrop.bottom * rotated.height).roundToInt().coerceIn(cTop + 8, rotated.height)
+            Bitmap.createBitmap(rotated, cLeft, cTop, (cRight - cLeft).coerceAtLeast(1), (cBottom - cTop).coerceAtLeast(1))
+        } else rotated
 
-        val w = rotated.width
-        val h = rotated.height
+        if (cropRatio == null || cropRatio <= 0f) return croppedFree
+
+        val w = croppedFree.width
+        val h = croppedFree.height
         val currentRatio = w.toFloat() / h.toFloat()
-        if (abs(currentRatio - cropRatio) < 0.01f) return rotated
+        if (abs(currentRatio - cropRatio) < 0.01f) return croppedFree
 
         val (targetW, targetH) = if (currentRatio > cropRatio) {
             (h * cropRatio).roundToInt().coerceIn(1, w) to h
@@ -341,7 +641,7 @@ object ImageEditorRenderer {
         }
         val left = ((w - targetW) / 2).coerceAtLeast(0)
         val top = ((h - targetH) / 2).coerceAtLeast(0)
-        return Bitmap.createBitmap(rotated, left, top, targetW, targetH)
+        return Bitmap.createBitmap(croppedFree, left, top, targetW, targetH)
     }
 
     private fun buildAndroidColorMatrix(doc: ImageEditorDocument): ColorMatrix {

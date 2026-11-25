@@ -8,10 +8,18 @@ import com.example.model.CanvasFitMode
 import com.example.model.ChromaKeyConfig
 import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
+import com.example.model.ImageBrushStroke
 import com.example.model.ImageCropRatio
+import com.example.model.ImageCropRect
 import com.example.model.ImageEditorDocument
+import com.example.model.ImageFloodFillOp
+import com.example.model.ImageOverlayLayer
+import com.example.model.ImageShapeLayer
 import com.example.model.ImageTextLayer
 import com.example.model.KeyframePoint
+import com.example.model.NormalizedPoint
+import com.example.model.PaintBrushType
+import com.example.model.PaintShapeType
 import com.example.model.PanZoomPreset
 import com.example.model.PipOverlayItem
 import com.example.model.ProjectTimelineData
@@ -27,6 +35,7 @@ import com.example.model.VoiceEffectPreset
 import com.example.model.interpolateKeyframes
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -207,5 +216,72 @@ class ProjectTimelineTest {
         val encoded = json.encodeToString(ProjectTimelineData.serializer(), original)
         val decoded = json.decodeFromString<ProjectTimelineData>(encoded)
         assertEquals(original, decoded)
+    }
+
+    @Test
+    fun `image crop rect computes width height and full state accurately`() {
+        val full = ImageCropRect()
+        assertTrue(full.isFull)
+        assertEquals(1.0f, full.width, 0.001f)
+        assertEquals(1.0f, full.height, 0.001f)
+
+        val cropped = ImageCropRect(left = 0.1f, top = 0.2f, right = 0.7f, bottom = 0.8f)
+        assertFalse(cropped.isFull)
+        assertEquals(0.6f, cropped.width, 0.001f)
+        assertEquals(0.6f, cropped.height, 0.001f)
+
+        val tiny = ImageCropRect(left = 0.5f, top = 0.5f, right = 0.51f, bottom = 0.52f)
+        assertEquals(0.08f, tiny.width, 0.001f)
+        assertEquals(0.08f, tiny.height, 0.001f)
+    }
+
+    @Test
+    fun `paint image editor document holds blank canvas, flood fills, brushes, shapes, and overlays`() {
+        val stroke = ImageBrushStroke(
+            points = listOf(NormalizedPoint(0.2f, 0.2f), NormalizedPoint(0.5f, 0.5f)),
+            colorHex = 0xFFFF6B00,
+            strokeWidthDp = 12f,
+            brushType = PaintBrushType.AIRBRUSH,
+            alpha = 0.85f
+        )
+        val fill = ImageFloodFillOp(xFraction = 0.1f, yFraction = 0.1f, colorHex = 0xFF1E88E5)
+        val shape = ImageShapeLayer(
+            shapeType = PaintShapeType.STAR,
+            startX = 0.3f,
+            startY = 0.3f,
+            endX = 0.7f,
+            endY = 0.7f,
+            filled = true
+        )
+        val overlay = ImageOverlayLayer(
+            uriString = "content://img/timpa.png",
+            displayName = "Karakter Panel",
+            scale = 0.6f,
+            rotationDeg = 25f,
+            opacity = 0.9f,
+            blendMode = BlendModePreset.MULTIPLY,
+            flipHorizontal = true
+        )
+
+        val doc = ImageEditorDocument(
+            isBlankCanvas = true,
+            blankCanvasWidth = 960,
+            blankCanvasHeight = 1280,
+            appliedCropRect = ImageCropRect(0.05f, 0.05f, 0.95f, 0.95f),
+            floodFills = listOf(fill),
+            strokes = listOf(stroke),
+            shapes = listOf(shape),
+            overlayImages = listOf(overlay)
+        )
+
+        assertTrue(doc.isBlankCanvas)
+        assertEquals(960, doc.blankCanvasWidth)
+        assertEquals(1280, doc.blankCanvasHeight)
+        assertFalse(doc.appliedCropRect.isFull)
+        assertEquals(PaintBrushType.AIRBRUSH, doc.strokes.first().brushType)
+        assertEquals(0xFF1E88E5, doc.floodFills.first().colorHex)
+        assertEquals(PaintShapeType.STAR, doc.shapes.first().shapeType)
+        assertEquals(BlendModePreset.MULTIPLY, doc.overlayImages.first().blendMode)
+        assertTrue(doc.overlayImages.first().flipHorizontal)
     }
 }
