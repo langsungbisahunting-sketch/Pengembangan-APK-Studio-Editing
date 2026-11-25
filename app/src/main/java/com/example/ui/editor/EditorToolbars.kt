@@ -1,8 +1,10 @@
 package com.example.ui.editor
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -34,8 +36,6 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,17 +52,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.ExportResolution
-import com.example.ui.theme.AmberAudio
-import com.example.ui.theme.ElectricCyan
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.EnergyOrangeSoft
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.KomikNarasiHeroGradient
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioSurface
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.VioletOverlay
 import com.example.viewmodel.EditorToolTab
 
 @Composable
@@ -101,7 +102,7 @@ fun EditorTopBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Kembali",
-                        tint = TextPrimary
+                        tint = PureWhite
                     )
                 }
 
@@ -131,7 +132,7 @@ fun EditorTopBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Undo,
                         contentDescription = "Urungkan",
-                        tint = if (canUndo) TextPrimary else TextMuted,
+                        tint = if (canUndo) PureWhite else TextMuted,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -144,7 +145,7 @@ fun EditorTopBar(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Redo,
                         contentDescription = "Ulangi",
-                        tint = if (canRedo) TextPrimary else TextMuted,
+                        tint = if (canRedo) PureWhite else TextMuted,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -161,34 +162,39 @@ fun EditorTopBar(
                     Text(
                         text = resolution.badge,
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextPrimary,
+                        color = PureWhite,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                     )
                 }
 
-                Button(
-                    onClick = onExportClick,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ElectricCyan,
-                        contentColor = Color(0xFF041318)
-                    ),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                Box(
                     modifier = Modifier
                         .height(36.dp)
-                        .testTag("editor_export_button")
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(KomikNarasiHeroGradient)
+                        .clickable(onClick = onExportClick)
+                        .padding(horizontal = 12.dp)
+                        .testTag("editor_export_button"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.FileUpload,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Ekspor",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.FileUpload,
+                            contentDescription = null,
+                            tint = PureWhite,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Ekspor",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = PureWhite,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -208,17 +214,17 @@ fun EditorBottomToolDock(
     onBackToMain: () -> Unit
 ) {
     val mainTools = listOf(
-        ToolDockItem(EditorToolTab.EDIT, Icons.Filled.ContentCut, ElectricCyan),
-        ToolDockItem(EditorToolTab.AUDIO, Icons.Filled.MusicNote, AmberAudio),
-        ToolDockItem(EditorToolTab.TEXT, Icons.Filled.TextFields, VioletOverlay),
+        ToolDockItem(EditorToolTab.EDIT, Icons.Filled.ContentCut, EnergyOrange),
+        ToolDockItem(EditorToolTab.AUDIO, Icons.Filled.MusicNote, GoldAccent),
+        ToolDockItem(EditorToolTab.TEXT, Icons.Filled.TextFields, PureWhite),
         ToolDockItem(EditorToolTab.PIP, Icons.Filled.Layers, EmeraldSuccess),
-        ToolDockItem(EditorToolTab.EFFECTS, Icons.Filled.AutoAwesome, NeonCoral),
-        ToolDockItem(EditorToolTab.FILTER, Icons.Filled.FilterVintage, NeonCoral),
-        ToolDockItem(EditorToolTab.ADJUST, Icons.Filled.Tune, ElectricCyan),
+        ToolDockItem(EditorToolTab.EFFECTS, Icons.Filled.AutoAwesome, EnergyOrange),
+        ToolDockItem(EditorToolTab.FILTER, Icons.Filled.FilterVintage, EnergyOrange),
+        ToolDockItem(EditorToolTab.ADJUST, Icons.Filled.Tune, PureWhite),
         ToolDockItem(EditorToolTab.CHROMA, Icons.Filled.FilterBAndW, EmeraldSuccess),
-        ToolDockItem(EditorToolTab.KEYFRAME, Icons.Filled.Diamond, ElectricCyan),
-        ToolDockItem(EditorToolTab.RATIO, Icons.Filled.AspectRatio, TextPrimary),
-        ToolDockItem(EditorToolTab.TRANSITION, Icons.Filled.AutoAwesomeMotion, ElectricCyan),
+        ToolDockItem(EditorToolTab.KEYFRAME, Icons.Filled.Diamond, GoldAccent),
+        ToolDockItem(EditorToolTab.RATIO, Icons.Filled.AspectRatio, PureWhite),
+        ToolDockItem(EditorToolTab.TRANSITION, Icons.Filled.AutoAwesomeMotion, EnergyOrange),
         ToolDockItem(EditorToolTab.CANVAS, Icons.Filled.ColorLens, TextSecondary)
     )
 
@@ -240,7 +246,7 @@ fun EditorBottomToolDock(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier
-                            .width(66.dp)
+                            .width(68.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onSelectTab(item.tab) }
                             .padding(vertical = 6.dp)
@@ -256,7 +262,8 @@ fun EditorBottomToolDock(
                             text = item.tab.label,
                             style = MaterialTheme.typography.labelMedium,
                             color = TextPrimary,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -284,14 +291,14 @@ fun EditorBottomToolDock(
                         Icon(
                             imageVector = Icons.Filled.ChevronLeft,
                             contentDescription = "Tutup Alat",
-                            tint = TextPrimary,
+                            tint = PureWhite,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
                             text = "Menu",
                             style = MaterialTheme.typography.labelLarge,
-                            color = TextPrimary
+                            color = PureWhite
                         )
                     }
                 }
@@ -299,18 +306,21 @@ fun EditorBottomToolDock(
                 Text(
                     text = activeTab.label,
                     style = MaterialTheme.typography.titleMedium,
-                    color = ElectricCyan
+                    color = EnergyOrange,
+                    fontWeight = FontWeight.Bold
                 )
 
                 Surface(
                     onClick = onBackToMain,
                     shape = RoundedCornerShape(10.dp),
-                    color = ElectricCyan.copy(alpha = 0.16f)
+                    color = EnergyOrangeSoft,
+                    border = BorderStroke(1.dp, EnergyOrange.copy(alpha = 0.5f))
                 ) {
                     Text(
                         text = "Selesai",
                         style = MaterialTheme.typography.labelLarge,
-                        color = ElectricCyan,
+                        color = EnergyOrange,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     )
                 }

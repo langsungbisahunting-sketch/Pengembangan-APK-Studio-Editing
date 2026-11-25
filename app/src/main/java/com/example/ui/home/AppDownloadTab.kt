@@ -45,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -55,21 +54,20 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.ui.theme.AmberAudio
-import com.example.ui.theme.ElectricCyan
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.KomikNarasiHeroGradient
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
-import com.example.ui.theme.StudioSurfaceElevated
-import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextPrimary
+import com.example.ui.theme.StudioObsidian
+import com.example.ui.theme.StudioSurface
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.VioletOverlay
 
-private const val VELOCUT_INSTALL_URL =
+private const val KN_INSTALL_URL =
     "https://ais-pre-l3czvjo3k7wbkp7k4vbpzn-1011596292594.asia-east1.run.app"
-private const val VELOCUT_BUILD_CMD = "gradle :app:assembleRelease"
+private const val KN_BUILD_CMD = "gradle :app:assembleRelease"
 
 @Composable
 fun AppDownloadTabContent(
@@ -82,7 +80,7 @@ fun AppDownloadTabContent(
         modifier = Modifier
             .fillMaxSize()
             .testTag("app_download_tab_content"),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -94,20 +92,10 @@ fun AppDownloadTabContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    Color(0xFF0A2E3D),
-                                    Color(0xFF151C2D),
-                                    Color(0xFF2B1732)
-                                )
-                            )
-                        )
+                        .background(KomikNarasiHeroGradient)
                         .border(
                             width = 1.dp,
-                            brush = Brush.linearGradient(
-                                listOf(ElectricCyan.copy(alpha = 0.65f), VioletOverlay.copy(alpha = 0.6f))
-                            ),
+                            color = PureWhite.copy(alpha = 0.25f),
                             shape = RoundedCornerShape(22.dp)
                         )
                         .padding(20.dp)
@@ -121,25 +109,25 @@ fun AppDownloadTabContent(
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(CircleShape)
-                                    .background(ElectricCyan.copy(alpha = 0.16f)),
+                                    .background(StudioObsidian.copy(alpha = 0.65f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Download,
-                                    contentDescription = "Unduh Aplikasi",
-                                    tint = ElectricCyan
+                                    contentDescription = "Unduh Komik Narasi",
+                                    tint = PureWhite
                                 )
                             }
                             Column {
                                 Text(
-                                    text = "Unduh & Instal VeloCut ke HP",
+                                    text = "Unduh Komik Narasi Studio",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = TextPrimary
+                                    color = PureWhite
                                 )
                                 Text(
-                                    text = "Paket APK Android, QR Code instan, & CI Release",
+                                    text = "APK Android, QR Code instan, & rilis GitHub otomatis",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = TextSecondary
+                                    color = PureWhite.copy(alpha = 0.85f)
                                 )
                             }
                         }
@@ -150,7 +138,7 @@ fun AppDownloadTabContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             QrCodeCard(
-                                payload = VELOCUT_INSTALL_URL,
+                                payload = KN_INSTALL_URL,
                                 modifier = Modifier.size(132.dp)
                             )
 
@@ -165,19 +153,19 @@ fun AppDownloadTabContent(
                                     Icon(
                                         imageVector = Icons.Filled.QrCode2,
                                         contentDescription = null,
-                                        tint = ElectricCyan,
+                                        tint = GoldAccent,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
                                         text = "Pindai QR di HP",
                                         style = MaterialTheme.typography.titleSmall,
-                                        color = TextPrimary
+                                        color = PureWhite
                                     )
                                 }
                                 Text(
-                                    text = VELOCUT_INSTALL_URL,
+                                    text = KN_INSTALL_URL,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = ElectricCyan,
+                                    color = PureWhite.copy(alpha = 0.9f),
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -185,15 +173,15 @@ fun AppDownloadTabContent(
                                     onClick = {
                                         runCatching {
                                             context.startActivity(
-                                                Intent(Intent.ACTION_VIEW, Uri.parse(VELOCUT_INSTALL_URL))
+                                                Intent(Intent.ACTION_VIEW, Uri.parse(KN_INSTALL_URL))
                                             )
                                         }.onFailure {
                                             onNotify("Tidak ada browser tersedia di perangkat ini.")
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = ElectricCyan,
-                                        contentColor = Color(0xFF041318)
+                                        containerColor = PureWhite,
+                                        contentColor = StudioObsidian
                                     ),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier
@@ -218,10 +206,10 @@ fun AppDownloadTabContent(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    clipboard.setText(AnnotatedString(VELOCUT_INSTALL_URL))
-                                    onNotify("Tautan instalasi VeloCut disalin!")
+                                    clipboard.setText(AnnotatedString(KN_INSTALL_URL))
+                                    onNotify("Tautan instalasi Komik Narasi disalin!")
                                 },
-                                border = BorderStroke(1.dp, StudioBorder),
+                                border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.45f)),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .weight(1f)
@@ -231,30 +219,30 @@ fun AppDownloadTabContent(
                                 Icon(
                                     imageVector = Icons.Filled.ContentCopy,
                                     contentDescription = null,
-                                    tint = TextPrimary,
+                                    tint = PureWhite,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Salin Link", color = TextPrimary)
+                                Text("Salin Link", color = PureWhite)
                             }
 
                             Button(
                                 onClick = {
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, "Instal VeloCut Video Editor")
+                                        putExtra(Intent.EXTRA_SUBJECT, "Instal Komik Narasi Studio")
                                         putExtra(
                                             Intent.EXTRA_TEXT,
-                                            "Edit video sekelas studio di HP dengan VeloCut! Buka tautan: $VELOCUT_INSTALL_URL"
+                                            "Edit video & komik narasi di HP dengan Komik Narasi Studio! Buka tautan: $KN_INSTALL_URL"
                                         )
                                     }
                                     context.startActivity(
-                                        Intent.createChooser(shareIntent, "Bagikan Tautan VeloCut")
+                                        Intent.createChooser(shareIntent, "Bagikan Komik Narasi Studio")
                                     )
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = StudioCard,
-                                    contentColor = ElectricCyan
+                                    containerColor = StudioObsidian.copy(alpha = 0.85f),
+                                    contentColor = PureWhite
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -283,9 +271,9 @@ fun AppDownloadTabContent(
                 title = "1. Unduh File Installer Android (.APK)",
                 badge = "ANDROID 7.0+",
                 steps = listOf(
-                    "Buka menu Pengaturan / Ekspor (Settings) di AI Studio lalu pilih Generate APK / AAB untuk mengunduh file installer langsung ke HP.",
-                    "Atau push kode ke GitHub: workflow CI (.github/workflows/build-apk.yml) otomatis merakit app-debug.apk & app-release.apk di menu GitHub Releases.",
-                    "Di HP Android, ketuk file VeloCut.apk yang sudah diunduh, izinkan 'Sumber Tidak Dikenal' bila diminta, lalu tekan Instal."
+                    "Di GitHub repository Anda, buka bagian Releases di kanan lalu klik Komik Narasi Studio APK untuk mengunduh app-debug.apk.",
+                    "Atau dari Google AI Studio, klik Settings / Export -> Generate APK untuk mengunduh langsung ke perangkat.",
+                    "Ketuk file .apk di HP Android, izinkan Sumber Tidak Dikenal jika diminta, lalu tekan Instal."
                 )
             )
         }
@@ -293,17 +281,17 @@ fun AppDownloadTabContent(
         item {
             InstallGuideCard(
                 icon = Icons.Filled.Terminal,
-                tint = ElectricCyan,
+                tint = EnergyOrange,
                 title = "2. Perintah Build APK Lokal / CI",
                 badge = "GRADLE CLI",
                 steps = listOf(
-                    "Pastikan Android SDK terpasang atau gunakan GitHub Actions workflow yang sudah disediakan di repositori.",
-                    "Jalankan perintah build untuk menghasilkan APK siap pasang: app/build/outputs/apk/release/app-release.apk."
+                    "Workflow GitHub Actions (.github/workflows/build-apk.yml) otomatis merakit APK setiap kali Anda Push ke GitHub.",
+                    "Untuk build lokal di Android Studio / terminal, jalankan perintah release build."
                 ),
-                footerActionLabel = "Salin Perintah Build ($VELOCUT_BUILD_CMD)",
+                footerActionLabel = "Salin Perintah Build ($KN_BUILD_CMD)",
                 onFooterAction = {
-                    clipboard.setText(AnnotatedString(VELOCUT_BUILD_CMD))
-                    onNotify("Perintah '$VELOCUT_BUILD_CMD' disalin!")
+                    clipboard.setText(AnnotatedString(KN_BUILD_CMD))
+                    onNotify("Perintah '$KN_BUILD_CMD' disalin!")
                 }
             )
         }
@@ -311,12 +299,12 @@ fun AppDownloadTabContent(
         item {
             InstallGuideCard(
                 icon = Icons.Filled.PhoneIphone,
-                tint = AmberAudio,
-                title = "3. Akses di iOS & Peramban HP (Add to Home Screen)",
-                badge = "WEB / STREAMING",
+                tint = GoldAccent,
+                title = "3. Akses di iOS & Peramban HP",
+                badge = "STREAMING / WEB",
                 steps = listOf(
-                    "Buka tautan preview VeloCut di Safari (iOS) atau Chrome (Android) dengan memindai QR Code di atas.",
-                    "Ketuk ikon Share (iOS) atau menu titik tiga (Chrome), lalu pilih 'Tambahkan ke Layar Utama / Add to Home Screen' untuk akses cepat tanpa instalasi manual."
+                    "Pindai QR Code di atas dari kamera HP atau buka tautan preview Komik Narasi Studio.",
+                    "Pilih Tambahkan ke Layar Utama (Add to Home Screen) untuk akses cepat dari layar beranda HP."
                 )
             )
         }
@@ -337,8 +325,8 @@ private fun QrCodeCard(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        border = BorderStroke(2.dp, ElectricCyan.copy(alpha = 0.65f))
+        color = PureWhite,
+        border = BorderStroke(2.dp, StudioObsidian)
     ) {
         Canvas(
             modifier = Modifier
@@ -355,7 +343,7 @@ private fun QrCodeCard(
                 for (c in 0 until n) {
                     if (matrix[r][c]) {
                         drawRect(
-                            color = Color(0xFF0B0D12),
+                            color = Color(0xFF0B0B0D),
                             topLeft = Offset(offsetX + c * cellSize, offsetY + r * cellSize),
                             size = Size(cellSize * 0.96f, cellSize * 0.96f)
                         )
@@ -379,7 +367,7 @@ private fun InstallGuideCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = StudioSurfaceElevated,
+        color = StudioSurface,
         border = BorderStroke(1.dp, StudioBorder)
     ) {
         Column(
@@ -413,7 +401,7 @@ private fun InstallGuideCard(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary
+                        color = PureWhite
                     )
                 }
 
@@ -454,7 +442,7 @@ private fun InstallGuideCard(
             if (footerActionLabel != null && onFooterAction != null) {
                 OutlinedButton(
                     onClick = onFooterAction,
-                    border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, EnergyOrange.copy(alpha = 0.6f)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -464,13 +452,13 @@ private fun InstallGuideCard(
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
                         contentDescription = null,
-                        tint = ElectricCyan,
+                        tint = EnergyOrange,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = footerActionLabel,
-                        color = ElectricCyan,
+                        color = EnergyOrange,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -497,13 +485,11 @@ private fun buildDeterministicQrMatrix(payload: String, size: Int = 25): Array<B
     drawFinder(0, size - 7)
     drawFinder(size - 7, 0)
 
-    // Timing patterns
     for (i in 8 until size - 8) {
         grid[6][i] = i % 2 == 0
         grid[i][6] = i % 2 == 0
     }
 
-    // Small alignment pattern near bottom-right
     val alignOrigin = size - 9
     for (r in 0 until 5) {
         for (c in 0 until 5) {
@@ -513,7 +499,6 @@ private fun buildDeterministicQrMatrix(payload: String, size: Int = 25): Array<B
         }
     }
 
-    // Deterministic data modules seeded from payload
     var seed = payload.hashCode().toLong() xor 0x5DEECE66DL
     for (r in 0 until size) {
         for (c in 0 until size) {

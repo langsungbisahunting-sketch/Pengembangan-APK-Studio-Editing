@@ -48,9 +48,10 @@ fun buildComposeColorMatrix(
     val sat = if (filter.isGrayscale) 0f else (1f + filter.saturation + adjustments.saturation).coerceIn(0f, 2f)
     matrix.setToSaturation(sat)
 
-    val contrast = (1f + filter.contrast + adjustments.contrast).coerceIn(0.2f, 2.2f)
+    val contrast = (1f + filter.contrast + adjustments.contrast - adjustments.shadows * 0.15f).coerceIn(0.2f, 2.2f)
     val translateContrast = (-0.5f * contrast + 0.5f) * 255f
-    val brightnessOffset = (filter.brightness + adjustments.brightness).coerceIn(-0.6f, 0.6f) * 255f
+    val toneLift = adjustments.shadows * 0.35f + adjustments.highlights * 0.30f + adjustments.exposure * 0.7f
+    val brightnessOffset = (filter.brightness + adjustments.brightness + toneLift).coerceIn(-0.65f, 0.65f) * 255f
 
     val bcMatrix = ColorMatrix(
         floatArrayOf(

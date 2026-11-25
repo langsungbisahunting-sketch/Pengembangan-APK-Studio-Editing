@@ -8,17 +8,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-private val StudioDarkColorScheme = darkColorScheme(
-    primary = ElectricCyan,
-    onPrimary = Color(0xFF041318),
-    primaryContainer = Color(0xFF003B46),
-    onPrimaryContainer = ElectricCyan,
-    secondary = NeonCoral,
-    onSecondary = Color.White,
-    secondaryContainer = NeonCoralSoft,
-    onSecondaryContainer = Color(0xFFFFD9E2),
-    tertiary = VioletOverlay,
-    onTertiary = Color.White,
+private val KomikNarasiColorScheme = darkColorScheme(
+    primary = EnergyOrange,
+    onPrimary = PureWhite,
+    primaryContainer = EnergyOrangeSoft,
+    onPrimaryContainer = Color(0xFFFFD8BD),
+    secondary = GoldAccent,
+    onSecondary = Color(0xFF161204),
+    secondaryContainer = GoldSoft,
+    onSecondaryContainer = Color(0xFFFFECB3),
+    tertiary = PureWhite,
+    onTertiary = StudioObsidian,
     background = StudioObsidian,
     onBackground = TextPrimary,
     surface = StudioSurface,
@@ -29,9 +29,9 @@ private val StudioDarkColorScheme = darkColorScheme(
     surfaceContainer = StudioSurfaceElevated,
     surfaceContainerHigh = StudioCard,
     outline = StudioBorder,
-    outlineVariant = Color(0xFF212636),
-    error = NeonCoral,
-    onError = Color.White
+    outlineVariant = Color(0xFF26262F),
+    error = CrimsonAlert,
+    onError = PureWhite
 )
 
 private val StudioShapes = Shapes(
@@ -43,11 +43,11 @@ private val StudioShapes = Shapes(
 )
 
 @Composable
-fun VeloCutTheme(
+fun KomikNarasiTheme(
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = StudioDarkColorScheme,
+        colorScheme = KomikNarasiColorScheme,
         typography = VeloCutTypography,
         shapes = StudioShapes,
         content = content

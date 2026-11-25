@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -50,8 +49,8 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.FilterVintage
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
@@ -70,6 +69,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -121,10 +121,12 @@ import com.example.model.StudioTemplate
 import com.example.ui.common.formatDurationShort
 import com.example.ui.common.formatFileSize
 import com.example.ui.common.formatTimestamp
-import com.example.ui.theme.AmberAudio
-import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.CrimsonAlert
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.KomikNarasiHeroGradient
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioObsidian
@@ -133,13 +135,12 @@ import com.example.ui.theme.StudioSurfaceElevated
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.VioletOverlay
 import com.example.viewmodel.StudioHomeViewModel
 import java.io.File
 
 private enum class HomeTab(val label: String) {
-    EDIT("Edit"),
-    TEMPLATE("Template"),
+    EDIT("Studio"),
+    TEMPLATE("Template KN"),
     EXPORTS("Ekspor"),
     DOWNLOAD("Unduh App")
 }
@@ -241,13 +242,15 @@ fun StudioHomeScreen(
                                 label = {
                                     Text(
                                         text = tab.label,
-                                        style = MaterialTheme.typography.labelMedium
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = ElectricCyan,
-                                    selectedTextColor = ElectricCyan,
-                                    indicatorColor = ElectricCyan.copy(alpha = 0.14f),
+                                    selectedIconColor = EnergyOrange,
+                                    selectedTextColor = EnergyOrange,
+                                    indicatorColor = EnergyOrange.copy(alpha = 0.16f),
                                     unselectedIconColor = TextSecondary,
                                     unselectedTextColor = TextSecondary
                                 )
@@ -287,9 +290,9 @@ fun StudioHomeScreen(
                                 },
                                 label = { Text(tab.label) },
                                 colors = NavigationRailItemDefaults.colors(
-                                    selectedIconColor = ElectricCyan,
-                                    selectedTextColor = ElectricCyan,
-                                    indicatorColor = ElectricCyan.copy(alpha = 0.14f),
+                                    selectedIconColor = EnergyOrange,
+                                    selectedTextColor = EnergyOrange,
+                                    indicatorColor = EnergyOrange.copy(alpha = 0.16f),
                                     unselectedIconColor = TextSecondary,
                                     unselectedTextColor = TextSecondary
                                 )
@@ -312,8 +315,13 @@ fun StudioHomeScreen(
                         StudioTopHeader(
                             currentTab = currentTab,
                             projectCount = projects.size,
-                            exportCount = exports.size
+                            exportCount = exports.size,
+                            onBadgeClick = {
+                                viewModel.showMessage("Komik Narasi Pro Engine Aktif · Semua Fitur Terbuka")
+                            }
                         )
+
+                        HorizontalDivider(color = PureWhite.copy(alpha = 0.08f), thickness = 1.dp)
 
                         when (currentTab) {
                             HomeTab.EDIT -> EditHubContent(
@@ -357,24 +365,24 @@ fun StudioHomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.65f)),
+                                .background(Color.Black.copy(alpha = 0.72f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
-                                color = StudioCard,
-                                border = BorderStroke(1.dp, StudioBorder)
+                                color = StudioSurface,
+                                border = BorderStroke(1.dp, EnergyOrange)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(24.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    CircularProgressIndicator(color = ElectricCyan)
+                                    CircularProgressIndicator(color = EnergyOrange)
                                     Text(
-                                        text = "Menyiapkan timeline studio...",
+                                        text = "Menyiapkan Komik Narasi Studio...",
                                         style = MaterialTheme.typography.titleMedium,
-                                        color = TextPrimary
+                                        color = PureWhite
                                     )
                                 }
                             }
@@ -410,7 +418,8 @@ fun StudioHomeScreen(
 private fun StudioTopHeader(
     currentTab: HomeTab,
     projectCount: Int,
-    exportCount: Int
+    exportCount: Int,
+    onBadgeClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -421,38 +430,35 @@ private fun StudioTopHeader(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(ElectricCyan, NeonCoral)
-                        )
-                    ),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(KomikNarasiHeroGradient)
+                    .border(1.dp, PureWhite.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.ContentCut,
-                    contentDescription = "Logo VeloCut",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    contentDescription = "Logo Komik Narasi",
+                    tint = PureWhite,
+                    modifier = Modifier.size(21.dp)
                 )
             }
             Column {
                 Text(
-                    text = "VeloCut",
+                    text = "Komik Narasi",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = TextPrimary
+                    color = PureWhite
                 )
                 Text(
                     text = when (currentTab) {
-                        HomeTab.EDIT -> "$projectCount draf tersimpan"
-                        HomeTab.TEMPLATE -> "Preset studio siap pakai"
-                        HomeTab.EXPORTS -> "$exportCount video ter-render"
-                        HomeTab.DOWNLOAD -> "Instal APK & tautan HP"
+                        HomeTab.EDIT -> "KN Cloud · $projectCount draf lokal"
+                        HomeTab.TEMPLATE -> "Template Eksklusif Komik Narasi"
+                        HomeTab.EXPORTS -> "Komik Narasi Pro Engine · $exportCount hasil"
+                        HomeTab.DOWNLOAD -> "Unduh APK & panduan instalasi"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
@@ -461,16 +467,24 @@ private fun StudioTopHeader(
         }
 
         Surface(
+            onClick = onBadgeClick,
             shape = RoundedCornerShape(999.dp),
-            color = StudioSurfaceElevated,
-            border = BorderStroke(1.dp, StudioBorder)
+            color = Color.Transparent,
+            border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.55f)),
+            modifier = Modifier.testTag("pro_engine_badge")
         ) {
-            Text(
-                text = "STUDIO PRO",
-                style = MaterialTheme.typography.labelSmall,
-                color = ElectricCyan,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .background(KomikNarasiHeroGradient)
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = "KN PRO",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = PureWhite
+                )
+            }
         }
     }
 }
@@ -488,18 +502,18 @@ private fun EditHubContent(
 ) {
     val shortcuts = remember {
         listOf(
-            QuickToolShortcut("Potong", Icons.Filled.ContentCut, ElectricCyan, AspectRatioPreset.RATIO_9_16),
-            QuickToolShortcut("Kecepatan", Icons.Filled.Speed, NeonCoral, AspectRatioPreset.RATIO_9_16),
-            QuickToolShortcut("Filter", Icons.Filled.FilterVintage, VioletOverlay, AspectRatioPreset.RATIO_4_5),
-            QuickToolShortcut("Teks", Icons.Filled.TextFields, ElectricCyan, AspectRatioPreset.RATIO_9_16),
-            QuickToolShortcut("Musik", Icons.Filled.MusicNote, AmberAudio, AspectRatioPreset.RATIO_9_16),
-            QuickToolShortcut("Rasio", Icons.Filled.AspectRatio, EmeraldSuccess, AspectRatioPreset.RATIO_16_9)
+            QuickToolShortcut("Potong", Icons.Filled.ContentCut, EnergyOrange, AspectRatioPreset.RATIO_9_16),
+            QuickToolShortcut("Narasi TTS", Icons.Filled.RecordVoiceOver, GoldAccent, AspectRatioPreset.RATIO_9_16),
+            QuickToolShortcut("Kecepatan", Icons.Filled.Speed, PureWhite, AspectRatioPreset.RATIO_9_16),
+            QuickToolShortcut("Filter KN", Icons.Filled.FilterVintage, EnergyOrange, AspectRatioPreset.RATIO_4_5),
+            QuickToolShortcut("Teks Komik", Icons.Filled.TextFields, PureWhite, AspectRatioPreset.RATIO_3_4),
+            QuickToolShortcut("Rasio", Icons.Filled.AspectRatio, GoldAccent, AspectRatioPreset.RATIO_16_9)
         )
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         item {
@@ -509,9 +523,9 @@ private fun EditHubContent(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Alat Cepat Studio",
+                    text = "Alat Cepat Komik Narasi",
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary
+                    color = PureWhite
                 )
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -528,9 +542,9 @@ private fun EditHubContent(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(54.dp)
                                     .clip(RoundedCornerShape(16.dp))
-                                    .background(StudioCard)
+                                    .background(StudioSurface)
                                     .border(1.dp, StudioBorder, RoundedCornerShape(16.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -559,15 +573,15 @@ private fun EditHubContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Proyek Saya",
+                    text = "Draf Komik Narasi",
                     style = MaterialTheme.typography.titleLarge,
-                    color = TextPrimary
+                    color = PureWhite
                 )
                 if (projects.isNotEmpty()) {
                     Text(
                         text = "${projects.size} proyek",
                         style = MaterialTheme.typography.labelMedium,
-                        color = TextMuted
+                        color = GoldAccent
                     )
                 }
             }
@@ -621,18 +635,10 @@ private fun NewProjectHeroBanner(onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF005B6E),
-                            Color(0xFF14243B),
-                            Color(0xFF3E1630)
-                        )
-                    )
-                )
+                .background(KomikNarasiHeroGradient)
                 .border(
                     width = 1.dp,
-                    brush = Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.7f), NeonCoral.copy(alpha = 0.6f))),
+                    color = PureWhite.copy(alpha = 0.25f),
                     shape = RoundedCornerShape(22.dp)
                 )
                 .padding(horizontal = 22.dp, vertical = 24.dp)
@@ -646,30 +652,42 @@ private fun NewProjectHeroBanner(onClick: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = StudioObsidian.copy(alpha = 0.72f)
+                    ) {
+                        Text(
+                            text = "KOMIK NARASI STUDIO",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoldAccent,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
                     Text(
-                        text = "Proyek Baru",
+                        text = "Buat Proyek Baru",
                         style = MaterialTheme.typography.displaySmall,
-                        color = Color.White
+                        color = PureWhite
                     )
                     Text(
-                        text = "Pilih video atau foto untuk mulai memotong, menambah musik, teks, dan filter.",
+                        text = "Impor panel komik, video, & suara narasi dalam satu timeline studio yang ringan dan elegan.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = PureWhite.copy(alpha = 0.9f)
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(58.dp)
                         .clip(CircleShape)
-                        .background(ElectricCyan),
+                        .background(PureWhite),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
                         contentDescription = "Buat Proyek Baru",
-                        tint = Color(0xFF041318),
-                        modifier = Modifier.size(30.dp)
+                        tint = StudioObsidian,
+                        modifier = Modifier.size(32.dp)
                     )
                 }
             }
@@ -695,7 +713,7 @@ private fun ProjectDraftCard(
             .clickable(onClick = onClick)
             .testTag("project_card_${project.id}"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+        colors = CardDefaults.cardColors(containerColor = StudioSurface),
         border = BorderStroke(1.dp, StudioBorder)
     ) {
         Row(
@@ -731,12 +749,12 @@ private fun ProjectDraftCard(
                         .align(Alignment.BottomEnd)
                         .padding(4.dp),
                     shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.72f)
+                    color = StudioObsidian.copy(alpha = 0.85f)
                 ) {
                     Text(
                         text = formatDurationShort(project.totalDurationMs),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = PureWhite,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
@@ -751,7 +769,7 @@ private fun ProjectDraftCard(
                 Text(
                     text = project.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
+                    color = PureWhite,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -761,12 +779,12 @@ private fun ProjectDraftCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = StudioCard
+                        color = EnergyOrange.copy(alpha = 0.16f)
                     ) {
                         Text(
                             text = project.aspectRatioName,
                             style = MaterialTheme.typography.labelSmall,
-                            color = ElectricCyan,
+                            color = EnergyOrange,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -788,7 +806,7 @@ private fun ProjectDraftCard(
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
                         contentDescription = "Opsi Proyek",
-                        tint = TextSecondary
+                        tint = PureWhite
                     )
                 }
                 DropdownMenu(
@@ -797,9 +815,9 @@ private fun ProjectDraftCard(
                     containerColor = StudioCard
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Ubah Nama", color = TextPrimary) },
+                        text = { Text("Ubah Nama", color = PureWhite) },
                         leadingIcon = {
-                            Icon(Icons.Filled.DriveFileRenameOutline, null, tint = ElectricCyan)
+                            Icon(Icons.Filled.DriveFileRenameOutline, null, tint = EnergyOrange)
                         },
                         onClick = {
                             menuExpanded = false
@@ -807,7 +825,7 @@ private fun ProjectDraftCard(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Duplikasi", color = TextPrimary) },
+                        text = { Text("Duplikasi", color = PureWhite) },
                         leadingIcon = {
                             Icon(Icons.Filled.FileCopy, null, tint = TextSecondary)
                         },
@@ -817,9 +835,9 @@ private fun ProjectDraftCard(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Hapus", color = NeonCoral) },
+                        text = { Text("Hapus", color = CrimsonAlert) },
                         leadingIcon = {
-                            Icon(Icons.Filled.DeleteOutline, null, tint = NeonCoral)
+                            Icon(Icons.Filled.DeleteOutline, null, tint = CrimsonAlert)
                         },
                         onClick = {
                             menuExpanded = false
@@ -837,7 +855,7 @@ private fun EmptyDraftsCard(onNewProject: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = StudioSurfaceElevated,
+        color = StudioSurface,
         border = BorderStroke(1.dp, StudioBorder)
     ) {
         Column(
@@ -850,16 +868,16 @@ private fun EmptyDraftsCard(onNewProject: () -> Unit) {
             Icon(
                 imageVector = Icons.Outlined.Movie,
                 contentDescription = null,
-                tint = ElectricCyan,
+                tint = EnergyOrange,
                 modifier = Modifier.size(44.dp)
             )
             Text(
-                text = "Belum Ada Proyek",
+                text = "Belum Ada Draf Komik Narasi",
                 style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
+                color = PureWhite
             )
             Text(
-                text = "Ketuk Proyek Baru di atas untuk memilih klip video atau foto dari galeri Anda.",
+                text = "Ketuk Buat Proyek Baru untuk mengimpor panel komik, video, atau foto dari galeri HP Anda.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary
             )
@@ -867,14 +885,16 @@ private fun EmptyDraftsCard(onNewProject: () -> Unit) {
             Button(
                 onClick = onNewProject,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ElectricCyan,
-                    contentColor = Color(0xFF041318)
+                    containerColor = EnergyOrange,
+                    contentColor = PureWhite
                 ),
-                modifier = Modifier.testTag("empty_new_project_button")
+                modifier = Modifier
+                    .height(48.dp)
+                    .testTag("empty_new_project_button")
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Pilih Media", fontWeight = FontWeight.SemiBold)
+                Text("Pilih Media", fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -888,7 +908,7 @@ private fun TemplatesTabContent(
     onSelectCategory: (String) -> Unit,
     onUseTemplate: (StudioTemplate) -> Unit
 ) {
-    val categories = listOf("Semua", "Sinematik", "Vlog", "Beat Sync")
+    val categories = listOf("Semua", "Komik Pop", "Narasi", "Sinematik", "Beat Sync")
     val filtered = if (selectedCategory == "Semua") {
         templates
     } else {
@@ -897,7 +917,7 @@ private fun TemplatesTabContent(
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(categories) { category ->
@@ -907,16 +927,16 @@ private fun TemplatesTabContent(
                     onClick = { onSelectCategory(category) },
                     label = { Text(category) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ElectricCyan.copy(alpha = 0.18f),
-                        selectedLabelColor = ElectricCyan,
-                        containerColor = StudioSurfaceElevated,
+                        selectedContainerColor = EnergyOrange.copy(alpha = 0.2f),
+                        selectedLabelColor = EnergyOrange,
+                        containerColor = StudioSurface,
                         labelColor = TextSecondary
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         enabled = true,
                         selected = selected,
                         borderColor = StudioBorder,
-                        selectedBorderColor = ElectricCyan
+                        selectedBorderColor = EnergyOrange
                     )
                 )
             }
@@ -931,7 +951,7 @@ private fun TemplatesTabContent(
             items(filtered, key = { it.id }) { tpl ->
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                    colors = CardDefaults.cardColors(containerColor = StudioSurface),
                     border = BorderStroke(1.dp, StudioBorder)
                 ) {
                     Column {
@@ -951,7 +971,7 @@ private fun TemplatesTabContent(
                                     .fillMaxSize()
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
+                                            listOf(Color.Transparent, StudioObsidian.copy(alpha = 0.85f))
                                         )
                                     )
                             )
@@ -963,23 +983,23 @@ private fun TemplatesTabContent(
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = Color.Black.copy(alpha = 0.65f)
+                                    color = StudioObsidian.copy(alpha = 0.78f)
                                 ) {
                                     Text(
                                         text = tpl.aspectRatio.label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = ElectricCyan,
+                                        color = EnergyOrange,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = Color.Black.copy(alpha = 0.65f)
+                                    color = StudioObsidian.copy(alpha = 0.78f)
                                 ) {
                                     Text(
                                         text = "${tpl.clipCountLabel} · ${tpl.durationLabel}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
+                                        color = PureWhite,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
@@ -987,7 +1007,7 @@ private fun TemplatesTabContent(
                             Text(
                                 text = tpl.title,
                                 style = MaterialTheme.typography.titleLarge,
-                                color = Color.White,
+                                color = PureWhite,
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
                                     .padding(14.dp)
@@ -1013,11 +1033,13 @@ private fun TemplatesTabContent(
                             Button(
                                 onClick = { onUseTemplate(tpl) },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = ElectricCyan,
-                                    contentColor = Color(0xFF041318)
+                                    containerColor = EnergyOrange,
+                                    contentColor = PureWhite
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.testTag("use_template_${tpl.id}")
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .testTag("use_template_${tpl.id}")
                             ) {
                                 Text("Gunakan", fontWeight = FontWeight.Bold)
                             }
@@ -1051,16 +1073,16 @@ private fun ExportsTabContent(
                 Icon(
                     imageVector = Icons.Outlined.VideoLibrary,
                     contentDescription = null,
-                    tint = TextMuted,
+                    tint = EnergyOrange,
                     modifier = Modifier.size(48.dp)
                 )
                 Text(
-                    text = "Belum Ada Video Diekspor",
+                    text = "Belum Ada Video Ter-Render",
                     style = MaterialTheme.typography.titleLarge,
-                    color = TextPrimary
+                    color = PureWhite
                 )
                 Text(
-                    text = "Hasil render MP4 dari Studio Editor akan muncul di sini untuk diputar, disimpan ke galeri, atau dibagikan.",
+                    text = "Hasil render MP4 dari Komik Narasi Studio akan tersimpan rapi di sini.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
@@ -1070,23 +1092,27 @@ private fun ExportsTabContent(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(exports, key = { it.id }) { item ->
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = StudioSurfaceElevated),
+                colors = CardDefaults.cardColors(containerColor = StudioSurface),
                 border = BorderStroke(1.dp, StudioBorder)
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(60.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(StudioCard)
                                 .clickable { onPlay(item) },
@@ -1095,22 +1121,22 @@ private fun ExportsTabContent(
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = "Putar Video",
-                                tint = ElectricCyan,
-                                modifier = Modifier.size(30.dp)
+                                tint = EnergyOrange,
+                                modifier = Modifier.size(28.dp)
                             )
                         }
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = TextPrimary,
+                                color = PureWhite,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${item.resolutionLabel} · ${formatDurationShort(item.durationMs)} · ${formatFileSize(item.fileSizeBytes)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = ElectricCyan
+                                color = EnergyOrange
                             )
                             Text(
                                 text = formatTimestamp(item.createdAt),
@@ -1128,7 +1154,7 @@ private fun ExportsTabContent(
                             onClick = { onSaveGallery(item) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = StudioCard,
-                                contentColor = if (item.mediaStoreUri != null) EmeraldSuccess else TextPrimary
+                                contentColor = if (item.mediaStoreUri != null) EmeraldSuccess else PureWhite
                             ),
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
@@ -1147,8 +1173,8 @@ private fun ExportsTabContent(
                         Button(
                             onClick = { onShare(item) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ElectricCyan.copy(alpha = 0.16f),
-                                contentColor = ElectricCyan
+                                containerColor = EnergyOrange.copy(alpha = 0.18f),
+                                contentColor = EnergyOrange
                             ),
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
@@ -1158,7 +1184,7 @@ private fun ExportsTabContent(
                             Text("Bagikan", style = MaterialTheme.typography.labelLarge)
                         }
                         IconButton(onClick = { onDelete(item) }) {
-                            Icon(Icons.Filled.DeleteOutline, contentDescription = "Hapus", tint = NeonCoral)
+                            Icon(Icons.Filled.DeleteOutline, contentDescription = "Hapus", tint = CrimsonAlert)
                         }
                     }
                 }
@@ -1176,8 +1202,8 @@ private fun RenameProjectDialog(
     var text by remember { mutableStateOf(initialTitle) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = StudioCard,
-        title = { Text("Ubah Nama Proyek", color = TextPrimary) },
+        containerColor = StudioSurface,
+        title = { Text("Ubah Nama Proyek", color = PureWhite) },
         text = {
             OutlinedTextField(
                 value = text,
@@ -1188,7 +1214,7 @@ private fun RenameProjectDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(text) }) {
-                Text("Simpan", color = ElectricCyan)
+                Text("Simpan", color = EnergyOrange)
             }
         },
         dismissButton = {
@@ -1225,7 +1251,7 @@ private fun ExportVideoPreviewDialog(
             Text(
                 text = export.title,
                 style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
+                color = PureWhite
             )
         },
         text = {
@@ -1249,7 +1275,7 @@ private fun ExportVideoPreviewDialog(
         },
         confirmButton = {
             TextButton(onClick = onShare) {
-                Text("Bagikan", color = ElectricCyan)
+                Text("Bagikan", color = EnergyOrange)
             }
         },
         dismissButton = {

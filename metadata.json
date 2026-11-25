@@ -1,6 +1,6 @@
 {
-  "name": "VeloCut",
-  "description": "Studio editing video mobile bergaya CapCut dengan timeline multi-track, potong dan bagi klip, filter warna, kontrol kecepatan, overlay teks, musik latar, dan ekspor MP4.",
+  "name": "Komik Narasi",
+  "description": "Komik Narasi Studio: Editor video modern dengan tema Hitam-Oranye elegan, multi-track timeline, AI Narasi Text-to-Speech, Auto-Caption & Terjemahan, Keyframe, Speed Curve, Chroma Key, PiP Blending, dan ekspor 480p-4K.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

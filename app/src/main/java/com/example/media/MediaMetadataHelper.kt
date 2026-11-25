@@ -20,7 +20,8 @@ data class ProbedAudio(
 
 object MediaMetadataHelper {
 
-    private val frameCache = object : LruCache<String, Bitmap>(64) {}
+    // Tuned cache size to prevent OOM on entry-level 2-4GB RAM devices
+    private val frameCache = object : LruCache<String, Bitmap>(36) {}
 
     fun takePersistablePermissionIfPossible(context: Context, uri: Uri) {
         try {
@@ -85,7 +86,7 @@ object MediaMetadataHelper {
         if (clip.isImage) {
             val cacheKey = "${clip.uriString}_img"
             val cached = frameCache.get(cacheKey)
-            val bmp = cached ?: decodeScaledImage(context, uri, 128, 128)?.also {
+            val bmp = cached ?: decodeScaledImage(context, uri, 96, 96)?.also {
                 frameCache.put(cacheKey, it)
             }
             if (bmp != null) {
@@ -111,7 +112,7 @@ object MediaMetadataHelper {
                         MediaMetadataRetriever.OPTION_CLOSEST_SYNC
                     )
                     if (frame != null) {
-                        val scaled = scaleCenterCrop(frame, 96, 96)
+                        val scaled = scaleCenterCrop(frame, 80, 80)
                         if (scaled != frame) frame.recycle()
                         frameCache.put(cacheKey, scaled)
                         result.add(scaled)
@@ -170,8 +171,12 @@ object MediaMetadataHelper {
         reqH: Int
     ): Bitmap? {
         return try {
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = 4
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
             context.contentResolver.openInputStream(uri)?.use { stream ->
-                val raw = BitmapFactory.decodeStream(stream) ?: return null
+                val raw = BitmapFactory.decodeStream(stream, null, opts) ?: return null
                 val scaled = scaleCenterCrop(raw, reqW, reqH)
                 if (scaled != raw) raw.recycle()
                 scaled

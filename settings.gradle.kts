@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "VeloCut"
+rootProject.name = "Komik Narasi Studio"
 
 include(":app")

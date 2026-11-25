@@ -8,12 +8,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import com.example.ai.AiTaskResult
-import com.example.ai.VeloCutAiService
+import com.example.ai.KomikNarasiAiService
 import com.example.data.local.ExportEntity
 import com.example.data.local.VeloCutDatabase
 import com.example.data.repository.ProjectRepository
 import com.example.media.AudioExtractionHelper
 import com.example.media.MediaMetadataHelper
+import com.example.media.TtsNarrationHelper
 import com.example.media.VideoExportManager
 import com.example.model.AspectRatioPreset
 import com.example.model.AudioTrackItem
@@ -30,6 +31,7 @@ import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
 import com.example.model.TextOverlayItem
 import com.example.model.TransitionType
+import com.example.model.TtsVoiceStyle
 import com.example.model.VideoClip
 import com.example.model.VideoEffectPreset
 import com.example.model.VocalSeparationMode
@@ -43,11 +45,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import kotlin.math.abs
 
 enum class EditorToolTab(val label: String) {
     MAIN("Utama"),
     EDIT("Edit"),
-    AUDIO("Audio"),
+    AUDIO("Audio & TTS"),
     TEXT("Teks & AI"),
     PIP("Overlay"),
     EFFECTS("Efek"),
@@ -76,7 +79,7 @@ sealed interface AiTaskState {
 data class EditorUiState(
     val isLoading: Boolean = true,
     val projectId: Long = 0L,
-    val projectTitle: String = "Proyek Baru",
+    val projectTitle: String = "Komik Narasi Proyek",
     val timeline: ProjectTimelineData = ProjectTimelineData(),
     val currentPositionMs: Long = 0L,
     val isPlaying: Boolean = false,
@@ -86,7 +89,8 @@ data class EditorUiState(
     val activeToolTab: EditorToolTab = EditorToolTab.MAIN,
     val timelineZoom: Float = 1.0f,
     val isPreviewMuted: Boolean = false,
-    val exportResolution: ExportResolution = ExportResolution.FHD_1080,
+    // Default 720p for smooth rendering on entry-level & mid-range phones (e.g., Infinix Smart 8)
+    val exportResolution: ExportResolution = ExportResolution.HD_720,
     val exportFrameRate: ExportFrameRate = ExportFrameRate.FPS_30,
     val exportBitrate: ExportBitrate = ExportBitrate.STANDARD,
     val exportState: ExportState = ExportState.Idle,
@@ -111,7 +115,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     private val dao = VeloCutDatabase.getInstance(application).veloCutDao()
     private val repository = ProjectRepository(dao)
     private val exportManager = VideoExportManager(application)
-    private val aiService = VeloCutAiService()
+    private val aiService = KomikNarasiAiService()
 
     private val _uiState = MutableStateFlow(EditorUiState())
     val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
@@ -172,14 +176,29 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun seekTo(positionMs: Long, fromUser: Boolean = true) {
-        val total = _uiState.value.timeline.totalDurationMs.coerceAtLeast(0L)
-        val clamped = positionMs.coerceIn(0L, total)
-        val clipAtPos = _uiState.value.timeline.findClipAt(clamped)?.first ?: 0
+        val timeline = _uiState.value.timeline
+        val total = timeline.totalDurationMs.coerceAtLeast(0L)
+        var clamped = positionMs.coerceIn(0L, total)
+        if (fromUser && timeline.snapToGrid && !_uiState.value.isPlaying) {
+            val grid = ((clamped + 250L) / 500L) * 500L
+            if (abs(grid - clamped) <= 110L) {
+                clamped = grid.coerceIn(0L, total)
+            }
+        }
+        val clipAtPos = timeline.findClipAt(clamped)?.first ?: 0
         _uiState.update {
             it.copy(
                 currentPositionMs = clamped,
                 selectedClipIndex = if (fromUser) clipAtPos else it.selectedClipIndex
             )
+        }
+    }
+
+    fun toggleSnapToGrid() {
+        mutateTimeline(pausePlayback = false) { it.copy(snapToGrid = !it.snapToGrid) }
+        val enabled = _uiState.value.timeline.snapToGrid
+        _uiState.update {
+            it.copy(statusBanner = if (enabled) "Snap-to-Grid aktif (0.5d)" else "Snap-to-Grid dimatikan")
         }
     }
 
@@ -393,6 +412,40 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun toggleSelectedClipSmoothSlowMo() {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        mutateTimeline(pausePlayback = false) { timeline ->
+            val list = timeline.clips.toMutableList()
+            list[idx] = clip.copy(smoothSlowMo = !clip.smoothSlowMo)
+            timeline.copy(clips = list)
+        }
+    }
+
+    fun updateSelectedClipCrop(cropScale: Float) {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        mutateTimeline(pausePlayback = false) { timeline ->
+            val list = timeline.clips.toMutableList()
+            list[idx] = clip.copy(cropScale = cropScale.coerceIn(1.0f, 2.5f))
+            timeline.copy(clips = list)
+        }
+    }
+
+    fun toggleReverseSelectedClip() {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        mutateTimeline { timeline ->
+            val list = timeline.clips.toMutableList()
+            list[idx] = clip.copy(isReversed = !clip.isReversed)
+            timeline.copy(clips = list)
+        }
+        val rev = _uiState.value.selectedClip?.isReversed == true
+        _uiState.update {
+            it.copy(statusBanner = if (rev) "Mode Reverse klip diaktifkan" else "Mode Reverse dimatikan")
+        }
+    }
+
     fun updateSelectedClipVolume(volume: Float) {
         val idx = _uiState.value.selectedClipIndex
         val clip = _uiState.value.selectedClip ?: return
@@ -463,6 +516,65 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 timeline.copy(clips = list, audioTrack = audio)
             }
             _uiState.update { it.copy(statusBanner = "Audio berhasil diekstrak ke trek A1") }
+        }
+    }
+
+    fun synthesizeTtsNarration(scriptText: String, style: TtsVoiceStyle) {
+        val clean = scriptText.trim()
+        if (clean.isEmpty()) {
+            _uiState.update { it.copy(statusBanner = "Tulis naskah cerita komik terlebih dahulu") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(aiTaskState = AiTaskState.Loading("Membuat suara narasi Komik Narasi...")) }
+            val result = TtsNarrationHelper.synthesizeNarrationToAudio(
+                context = getApplication(),
+                scriptText = clean,
+                style = style
+            )
+            if (result == null) {
+                _uiState.update {
+                    it.copy(
+                        aiTaskState = AiTaskState.Error(
+                            "Mesin Text-to-Speech perangkat tidak tersedia atau gagal menghasilkan suara."
+                        )
+                    )
+                }
+                return@launch
+            }
+            val audio = AudioTrackItem(
+                uriString = result.uriString,
+                title = result.title,
+                volume = 0.95f,
+                durationMs = result.durationMs
+            )
+            mutateTimeline(pausePlayback = false) { it.copy(audioTrack = audio) }
+            _uiState.update {
+                it.copy(
+                    aiTaskState = AiTaskState.Idle,
+                    statusBanner = "${result.title} ditambahkan ke trek audio!"
+                )
+            }
+        }
+    }
+
+    fun polishNarrationScriptWithAi(draft: String, onPolished: (String) -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(aiTaskState = AiTaskState.Loading("KN AI sedang merangkai naskah narasi...")) }
+            when (val res = aiService.polishComicNarrationScript(draft)) {
+                is AiTaskResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            aiTaskState = AiTaskState.Idle,
+                            statusBanner = "Naskah narasi komik siap dibacakan!"
+                        )
+                    }
+                    onPolished(res.data)
+                }
+                is AiTaskResult.Error -> {
+                    _uiState.update { it.copy(aiTaskState = AiTaskState.Error(res.message)) }
+                }
+            }
         }
     }
 
@@ -548,7 +660,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val idx = slot.first
         val offsetMs = slot.second
         val clip = state.timeline.clips[idx]
-        val existingIdx = clip.keyframes.indexOfFirst { kotlin.math.abs(it.timeOffsetMs - offsetMs) <= 200L }
+        val existingIdx = clip.keyframes.indexOfFirst { abs(it.timeOffsetMs - offsetMs) <= 200L }
         val point = KeyframePoint(
             timeOffsetMs = offsetMs,
             xOffset = xOffset,
@@ -610,14 +722,30 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setCanvasBackground(colorHex: Long) {
-        mutateTimeline(pausePlayback = false) { it.copy(canvasBgHex = colorHex) }
+        mutateTimeline(pausePlayback = false) {
+            it.copy(canvasBgHex = colorHex, canvasFitMode = CanvasFitMode.AUTO_FIT)
+        }
+    }
+
+    fun setCanvasBackgroundImage(uri: Uri) {
+        MediaMetadataHelper.takePersistablePermissionIfPossible(getApplication(), uri)
+        mutateTimeline(pausePlayback = false) {
+            it.copy(canvasBgImageUri = uri.toString(), canvasFitMode = CanvasFitMode.CUSTOM_IMAGE)
+        }
+        _uiState.update { it.copy(statusBanner = "Gambar latar kanvas diperbarui") }
+    }
+
+    fun toggleExportWatermark(enabled: Boolean) {
+        mutateTimeline(pausePlayback = false) { it.copy(includeWatermark = enabled) }
     }
 
     fun addTextOverlay(
         text: String,
         colorHex: Long = 0xFFFFFFFF,
-        bgColorHex: Long = 0x88000000,
-        styleId: String = "classic"
+        bgColorHex: Long = 0xCC16161A,
+        styleId: String = "classic",
+        useGradient: Boolean = false,
+        isSticker: Boolean = false
     ) {
         val clean = text.trim()
         if (clean.isEmpty()) return
@@ -630,6 +758,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             endMs = end.coerceAtLeast(start + 500L),
             colorHex = colorHex,
             bgColorHex = bgColorHex,
+            useGradient = useGradient,
+            isSticker = isSticker,
             styleId = styleId
         )
         mutateTimeline(pausePlayback = false) { timeline ->
@@ -681,7 +811,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val clipStart = state.timeline.clipStartPositionMs(clipIdx)
 
         viewModelScope.launch {
-            _uiState.update { it.copy(aiTaskState = AiTaskState.Loading("AI sedang membuat Auto-Caption...")) }
+            _uiState.update { it.copy(aiTaskState = AiTaskState.Loading("KN AI sedang membuat Auto-Caption...")) }
             val result = aiService.generateAutoCaptions(
                 context = getApplication(),
                 mediaUri = Uri.parse(clip.uriString),
@@ -700,7 +830,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                             yFraction = 0.80f,
                             fontSizeSp = 20f,
                             colorHex = 0xFFFFFFFF,
-                            bgColorHex = 0xB3000000,
+                            bgColorHex = 0xCC16161A,
                             styleId = "classic"
                         )
                     }
@@ -942,7 +1072,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             )
             if (uri != null) {
                 repository.updateExportMediaStoreUri(export.id, uri.toString())
-                _uiState.update { it.copy(statusBanner = "Video disimpan ke Galeri (Movies/VeloCut)") }
+                _uiState.update { it.copy(statusBanner = "Video disimpan ke Galeri (Movies/KomikNarasi)") }
             } else {
                 _uiState.update { it.copy(statusBanner = "Gagal menyimpan video ke Galeri") }
             }
@@ -964,7 +1094,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(
-            Intent.createChooser(intent, "Bagikan Video").apply {
+            Intent.createChooser(intent, "Bagikan Video Komik Narasi").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         )

@@ -4,6 +4,7 @@ import com.example.model.AspectRatioPreset
 import com.example.model.BlendModePreset
 import com.example.model.CanvasFitMode
 import com.example.model.ChromaKeyConfig
+import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
 import com.example.model.KeyframePoint
 import com.example.model.PipOverlayItem
@@ -90,7 +91,7 @@ class ProjectTimelineTest {
     }
 
     @Test
-    fun `timeline serialization round-trips filters overlays pip chroma and keyframes`() {
+    fun `timeline serialization round-trips komik narasi upgrades`() {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         val original = ProjectTimelineData(
             clips = listOf(
@@ -99,9 +100,12 @@ class ProjectTimelineTest {
                     sourceDurationMs = 5000L,
                     trimEndMs = 5000L,
                     speedCurve = SpeedCurvePreset.MONTAGE,
-                    voiceEffect = VoiceEffectPreset.STUDIO,
+                    smoothSlowMo = true,
+                    cropScale = 1.35f,
+                    isReversed = true,
+                    voiceEffect = VoiceEffectPreset.MEGAPHONE,
                     vocalMode = VocalSeparationMode.VOCAL_ONLY,
-                    transitionOut = TransitionType.GLITCH,
+                    transitionOut = TransitionType.PAGE_TURN,
                     chromaKey = ChromaKeyConfig(enabled = true, autoRemoveBg = true),
                     keyframes = listOf(
                         KeyframePoint(timeOffsetMs = 0L, scale = 1.0f),
@@ -111,9 +115,13 @@ class ProjectTimelineTest {
             ),
             textOverlays = listOf(
                 TextOverlayItem(
-                    text = "Halo Studio",
+                    text = "BOOM!",
                     startMs = 500L,
                     endMs = 2500L,
+                    strokeEnabled = true,
+                    useGradient = true,
+                    curveDegrees = -6f,
+                    isSticker = true,
                     fontStyle = TextFontStyle.MONO,
                     animation = TextAnimationType.POP
                 )
@@ -121,13 +129,17 @@ class ProjectTimelineTest {
             pipOverlays = listOf(
                 PipOverlayItem(
                     uriString = "content://pip/1",
-                    blendMode = BlendModePreset.SCREEN
+                    blendMode = BlendModePreset.LIGHTEN
                 )
             ),
-            filterPreset = FilterPreset.CINEMATIC,
+            filterPreset = FilterPreset.KOMIK_POP,
             videoEffect = VideoEffectPreset.SPARKLE,
-            aspectRatio = AspectRatioPreset.RATIO_16_9,
-            canvasFitMode = CanvasFitMode.BLUR_BG
+            adjustments = ColorAdjustments(highlights = 0.15f, shadows = -0.1f),
+            aspectRatio = AspectRatioPreset.RATIO_3_4,
+            canvasFitMode = CanvasFitMode.CUSTOM_IMAGE,
+            canvasBgImageUri = "content://bg/komik.png",
+            snapToGrid = true,
+            includeWatermark = true
         )
         val encoded = json.encodeToString(ProjectTimelineData.serializer(), original)
         val decoded = json.decodeFromString<ProjectTimelineData>(encoded)

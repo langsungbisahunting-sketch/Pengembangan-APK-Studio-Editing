@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,9 +27,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Flip
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VolumeUp
@@ -36,10 +40,13 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +65,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.model.AspectRatioPreset
 import com.example.model.CanvasFitMode
@@ -68,13 +76,16 @@ import com.example.model.PipOverlayItem
 import com.example.model.SpeedCurvePreset
 import com.example.model.TextOverlayItem
 import com.example.model.TransitionType
+import com.example.model.TtsVoiceStyle
 import com.example.model.VideoEffectPreset
 import com.example.model.VocalSeparationMode
 import com.example.model.VoiceEffectPreset
 import com.example.ui.common.formatTimecodeMs
-import com.example.ui.theme.AmberAudio
-import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.CrimsonAlert
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.EnergyOrangeSoft
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioSurfaceElevated
@@ -88,8 +99,11 @@ fun EditorSubPanelContainer(
     uiState: EditorUiState,
     onSplitClip: () -> Unit,
     onTrimClip: (Long, Long) -> Unit,
+    onCropClip: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSpeedCurveChange: (SpeedCurvePreset) -> Unit,
+    onToggleSmoothSlowMo: () -> Unit,
+    onToggleReverseClip: () -> Unit,
     onClipVolumeChange: (Float) -> Unit,
     onExtractAudio: () -> Unit,
     onRotateClip: () -> Unit,
@@ -107,7 +121,9 @@ fun EditorSubPanelContainer(
     onToggleClipNoiseReduction: () -> Unit,
     onToggleAudioFade: (Boolean?, Boolean?) -> Unit,
     onRemoveAudio: () -> Unit,
-    onAddText: (String, Long, Long, String) -> Unit,
+    onSynthesizeTtsNarration: (String, TtsVoiceStyle) -> Unit,
+    onPolishNarrationScript: (String, (String) -> Unit) -> Unit,
+    onAddText: (String, Long, Long, String, Boolean, Boolean) -> Unit,
     onUpdateSelectedText: ((TextOverlayItem) -> TextOverlayItem) -> Unit,
     onDeleteSelectedText: () -> Unit,
     onGenerateAutoCaptions: (String) -> Unit,
@@ -124,7 +140,8 @@ fun EditorSubPanelContainer(
     onSelectRatio: (AspectRatioPreset) -> Unit,
     onSelectFitMode: (CanvasFitMode) -> Unit,
     onSelectTransition: (TransitionType) -> Unit,
-    onSelectCanvasColor: (Long) -> Unit
+    onSelectCanvasColor: (Long) -> Unit,
+    onPickCanvasImage: () -> Unit
 ) {
     if (uiState.activeToolTab == EditorToolTab.MAIN) return
 
@@ -138,8 +155,11 @@ fun EditorSubPanelContainer(
                 uiState = uiState,
                 onSplitClip = onSplitClip,
                 onTrimClip = onTrimClip,
+                onCropClip = onCropClip,
                 onSpeedChange = onSpeedChange,
                 onSpeedCurveChange = onSpeedCurveChange,
+                onToggleSmoothSlowMo = onToggleSmoothSlowMo,
+                onToggleReverseClip = onToggleReverseClip,
                 onClipVolumeChange = onClipVolumeChange,
                 onExtractAudio = onExtractAudio,
                 onRotateClip = onRotateClip,
@@ -161,7 +181,9 @@ fun EditorSubPanelContainer(
                 onClipVocalModeChange = onClipVocalModeChange,
                 onToggleClipNoiseReduction = onToggleClipNoiseReduction,
                 onToggleFade = onToggleAudioFade,
-                onRemoveAudio = onRemoveAudio
+                onRemoveAudio = onRemoveAudio,
+                onSynthesizeTtsNarration = onSynthesizeTtsNarration,
+                onPolishNarrationScript = onPolishNarrationScript
             )
 
             EditorToolTab.TEXT -> TextAndAiCaptionInspector(
@@ -210,7 +232,8 @@ fun EditorSubPanelContainer(
                 selectedRatio = uiState.timeline.aspectRatio,
                 selectedFitMode = uiState.timeline.canvasFitMode,
                 onSelectRatio = onSelectRatio,
-                onSelectFitMode = onSelectFitMode
+                onSelectFitMode = onSelectFitMode,
+                onPickCanvasImage = onPickCanvasImage
             )
 
             EditorToolTab.TRANSITION -> TransitionInspector(
@@ -220,7 +243,9 @@ fun EditorSubPanelContainer(
 
             EditorToolTab.CANVAS -> CanvasBgInspector(
                 selectedColorHex = uiState.timeline.canvasBgHex,
-                onSelectColor = onSelectCanvasColor
+                hasCustomImage = !uiState.timeline.canvasBgImageUri.isNullOrBlank(),
+                onSelectColor = onSelectCanvasColor,
+                onPickCanvasImage = onPickCanvasImage
             )
 
             EditorToolTab.MAIN -> {}
@@ -233,8 +258,11 @@ private fun ClipEditInspector(
     uiState: EditorUiState,
     onSplitClip: () -> Unit,
     onTrimClip: (Long, Long) -> Unit,
+    onCropClip: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSpeedCurveChange: (SpeedCurvePreset) -> Unit,
+    onToggleSmoothSlowMo: () -> Unit,
+    onToggleReverseClip: () -> Unit,
     onClipVolumeChange: (Float) -> Unit,
     onExtractAudio: () -> Unit,
     onRotateClip: () -> Unit,
@@ -244,7 +272,7 @@ private fun ClipEditInspector(
     onDeleteClip: () -> Unit
 ) {
     val clip = uiState.selectedClip
-    var subMode by remember { mutableIntStateOf(0) } // 0=Actions, 1=Trim, 2=Speed/Curve, 3=Volume
+    var subMode by remember { mutableIntStateOf(0) } // 0=Actions, 1=Trim, 2=Speed/Curve, 3=Volume, 4=Crop
 
     Column(
         modifier = Modifier
@@ -264,7 +292,7 @@ private fun ClipEditInspector(
                         Text(
                             text = "Pangkas: ${formatTimecodeMs(clip.trimStartMs)} - ${formatTimecodeMs(clip.trimEndMs)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = ElectricCyan
+                            color = EnergyOrange
                         )
                         TextButton(onClick = { subMode = 0 }) {
                             Text("Kembali", color = TextSecondary)
@@ -277,8 +305,8 @@ private fun ClipEditInspector(
                         },
                         valueRange = 0f..maxDur,
                         colors = SliderDefaults.colors(
-                            thumbColor = ElectricCyan,
-                            activeTrackColor = ElectricCyan
+                            thumbColor = EnergyOrange,
+                            activeTrackColor = EnergyOrange
                         )
                     )
                 }
@@ -296,7 +324,8 @@ private fun ClipEditInspector(
                                 "Kurva: ${clip.speedCurve.label}"
                             },
                             style = MaterialTheme.typography.labelMedium,
-                            color = NeonCoral
+                            color = EnergyOrange,
+                            fontWeight = FontWeight.Bold
                         )
                         TextButton(onClick = { subMode = 0 }) {
                             Text("Kembali", color = TextSecondary)
@@ -319,9 +348,9 @@ private fun ClipEditInspector(
                                 val x = (i.toFloat() / (pts.size - 1)) * size.width
                                 val y = size.height - ((spd / 3.0f).coerceIn(0.05f, 1f) * size.height)
                                 if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                                drawCircle(ElectricCyan, radius = 3.5.dp.toPx(), center = Offset(x, y))
+                                drawCircle(GoldAccent, radius = 3.5.dp.toPx(), center = Offset(x, y))
                             }
-                            drawPath(path, color = NeonCoral, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+                            drawPath(path, color = EnergyOrange, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
                         }
                     }
 
@@ -334,8 +363,8 @@ private fun ClipEditInspector(
                                 onClick = { onSpeedCurveChange(curve) },
                                 label = { Text(curve.label) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = ElectricCyan.copy(alpha = 0.2f),
-                                    selectedLabelColor = ElectricCyan
+                                    selectedContainerColor = EnergyOrangeSoft,
+                                    selectedLabelColor = EnergyOrange
                                 )
                             )
                         }
@@ -346,8 +375,28 @@ private fun ClipEditInspector(
                         value = clip.speed,
                         onValueChange = onSpeedChange,
                         valueRange = 0.1f..10.0f,
-                        colors = SliderDefaults.colors(thumbColor = NeonCoral, activeTrackColor = NeonCoral)
+                        colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Smooth Slow-Mo (Interpolasi Halus)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                        Switch(
+                            checked = clip.smoothSlowMo,
+                            onCheckedChange = { onToggleSmoothSlowMo() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = PureWhite,
+                                checkedTrackColor = EnergyOrange
+                            )
+                        )
+                    }
                 }
 
                 3 -> {
@@ -359,7 +408,7 @@ private fun ClipEditInspector(
                         Text(
                             text = "Volume Klip: ${(clip.volume * 100).toInt()}%",
                             style = MaterialTheme.typography.labelMedium,
-                            color = ElectricCyan
+                            color = GoldAccent
                         )
                         TextButton(onClick = { subMode = 0 }) {
                             Text("Kembali", color = TextSecondary)
@@ -369,7 +418,31 @@ private fun ClipEditInspector(
                         value = clip.volume,
                         onValueChange = onClipVolumeChange,
                         valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
+                        colors = SliderDefaults.colors(thumbColor = GoldAccent, activeTrackColor = GoldAccent)
+                    )
+                }
+
+                4 -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Crop / Zoom Panel: ${String.format(java.util.Locale.US, "%.2fx", clip.cropScale)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = EnergyOrange,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(onClick = { subMode = 0 }) {
+                            Text("Kembali", color = TextSecondary)
+                        }
+                    }
+                    Slider(
+                        value = clip.cropScale,
+                        onValueChange = onCropClip,
+                        valueRange = 1.0f..2.5f,
+                        colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
                     )
                 }
             }
@@ -377,42 +450,58 @@ private fun ClipEditInspector(
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                MiniActionPill("Bagi", Icons.Filled.ContentCut, ElectricCyan, "edit_split_button") {
+                MiniActionPill("Bagi", Icons.Filled.ContentCut, EnergyOrange, "edit_split_button") {
                     onSplitClip()
                 }
             }
             item {
-                MiniActionPill("Pangkas", Icons.Filled.ContentCut, TextPrimary, "edit_trim_button") {
+                MiniActionPill("Pangkas", Icons.Filled.ContentCut, PureWhite, "edit_trim_button") {
                     subMode = if (subMode == 1) 0 else 1
                 }
             }
             item {
-                MiniActionPill("Kecepatan", Icons.Filled.Speed, NeonCoral, "edit_speed_button") {
+                MiniActionPill("Crop", Icons.Filled.Crop, EnergyOrange, "edit_crop_button") {
+                    subMode = if (subMode == 4) 0 else 4
+                }
+            }
+            item {
+                MiniActionPill("Kecepatan", Icons.Filled.Speed, EnergyOrange, "edit_speed_button") {
                     subMode = if (subMode == 2) 0 else 2
                 }
             }
             item {
-                MiniActionPill("Volume", Icons.Filled.VolumeUp, AmberAudio, "edit_volume_button") {
+                val revActive = clip?.isReversed == true
+                MiniActionPill(
+                    label = if (revActive) "Reverse ON" else "Reverse",
+                    icon = Icons.Filled.FastRewind,
+                    tint = if (revActive) EnergyOrange else PureWhite,
+                    tag = "edit_reverse_button"
+                ) {
+                    onToggleReverseClip()
+                }
+            }
+            item {
+                MiniActionPill("Volume", Icons.Filled.VolumeUp, GoldAccent, "edit_volume_button") {
                     subMode = if (subMode == 3) 0 else 3
                 }
             }
             item {
-                MiniActionPill("Ekstrak Audio", Icons.Filled.Audiotrack, AmberAudio, "edit_extract_audio_button") {
+                MiniActionPill("Ekstrak Audio", Icons.Filled.Audiotrack, GoldAccent, "edit_extract_audio_button") {
                     onExtractAudio()
                 }
             }
             item {
-                MiniActionPill("Putar 90°", Icons.Filled.RotateRight, TextPrimary, "edit_rotate_button") {
+                MiniActionPill("Putar 90°", Icons.Filled.RotateRight, PureWhite, "edit_rotate_button") {
                     onRotateClip()
                 }
             }
             item {
-                MiniActionPill("Cermin", Icons.Filled.Flip, TextPrimary, "edit_mirror_button") {
+                MiniActionPill("Cermin", Icons.Filled.Flip, PureWhite, "edit_mirror_button") {
                     onMirrorClip()
                 }
             }
             item {
-                MiniActionPill("Duplikat", Icons.Filled.FileCopy, TextPrimary, "edit_duplicate_button") {
+                MiniActionPill("Duplikat", Icons.Filled.FileCopy, PureWhite, "edit_duplicate_button") {
                     onDuplicateClip()
                 }
             }
@@ -427,7 +516,7 @@ private fun ClipEditInspector(
                 }
             }
             item {
-                MiniActionPill("Hapus", Icons.Filled.DeleteOutline, NeonCoral, "edit_delete_button") {
+                MiniActionPill("Hapus", Icons.Filled.DeleteOutline, CrimsonAlert, "edit_delete_button") {
                     onDeleteClip()
                 }
             }
@@ -473,14 +562,15 @@ private fun FilterInspector(
         items(FilterPreset.entries) { preset ->
             val selected = preset == selectedFilter
             val previewColors = when (preset) {
-                FilterPreset.NONE -> listOf(Color(0xFF2B3245), Color(0xFF4C5673))
-                FilterPreset.CINEMATIC -> listOf(Color(0xFF0E293D), Color(0xFF3E6C84))
-                FilterPreset.WARM_SUN -> listOf(Color(0xFF7B3E19), Color(0xFFE09F3E))
-                FilterPreset.COOL_MINT -> listOf(Color(0xFF114B5F), Color(0xFF00E5FF))
-                FilterPreset.VIVID -> listOf(Color(0xFF9E1946), Color(0xFFFF3B6B))
+                FilterPreset.NONE -> listOf(Color(0xFF23232A), Color(0xFF3E3E4A))
+                FilterPreset.KOMIK_POP -> listOf(Color(0xFFFF6B00), Color(0xFFFFC107))
+                FilterPreset.KOMIK_NOIR -> listOf(Color(0xFF0B0B0D), Color(0xFFF5F5F7))
+                FilterPreset.CINEMATIC -> listOf(Color(0xFF16161A), Color(0xFF4A5568))
+                FilterPreset.WARM_SUN -> listOf(Color(0xFF8C3B00), Color(0xFFFF9E44))
+                FilterPreset.COOL_MINT -> listOf(Color(0xFF15293A), Color(0xFF4682B4))
+                FilterPreset.VIVID -> listOf(Color(0xFFC41E3A), Color(0xFFFF6B00))
                 FilterPreset.BW_CLASSIC -> listOf(Color(0xFF1F1F1F), Color(0xFF9E9E9E))
                 FilterPreset.SEPIA -> listOf(Color(0xFF4A3728), Color(0xFFA68A64))
-                FilterPreset.CYBER -> listOf(Color(0xFF3B0A45), Color(0xFF00E5FF))
             }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -497,14 +587,15 @@ private fun FilterInspector(
                         .background(Brush.linearGradient(previewColors))
                         .border(
                             width = if (selected) 2.dp else 1.dp,
-                            color = if (selected) ElectricCyan else StudioBorder,
+                            color = if (selected) EnergyOrange else StudioBorder,
                             shape = RoundedCornerShape(12.dp)
                         )
                 )
                 Text(
                     text = preset.label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) ElectricCyan else TextSecondary
+                    color = if (selected) EnergyOrange else TextSecondary,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                 )
             }
         }
@@ -519,7 +610,7 @@ private fun ColorAdjustInspector(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(190.dp)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -529,9 +620,9 @@ private fun ColorAdjustInspector(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Color Grading Manual", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+            Text("Color Grading Komik Narasi", style = MaterialTheme.typography.labelLarge, color = PureWhite)
             TextButton(onClick = { onUpdate(ColorAdjustments()) }) {
-                Text("Reset", color = NeonCoral)
+                Text("Reset", color = CrimsonAlert)
             }
         }
         AdjustSliderRow("Kecerahan", adjustments.brightness, -0.4f..0.4f) {
@@ -545,6 +636,12 @@ private fun ColorAdjustInspector(
         }
         AdjustSliderRow("Exposure", adjustments.exposure, -0.4f..0.4f) {
             onUpdate(adjustments.copy(exposure = it))
+        }
+        AdjustSliderRow("Highlights", adjustments.highlights, -0.4f..0.4f) {
+            onUpdate(adjustments.copy(highlights = it))
+        }
+        AdjustSliderRow("Shadows", adjustments.shadows, -0.4f..0.4f) {
+            onUpdate(adjustments.copy(shadows = it))
         }
         AdjustSliderRow("Sharpen", adjustments.sharpen, 0f..1f) {
             onUpdate(adjustments.copy(sharpen = it))
@@ -570,14 +667,14 @@ private fun AdjustSliderRow(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = TextSecondary,
-            modifier = Modifier.width(82.dp)
+            modifier = Modifier.width(86.dp)
         )
         Slider(
             value = value,
             onValueChange = onChange,
             valueRange = range,
             modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
+            colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
         )
     }
 }
@@ -587,7 +684,8 @@ private fun AspectRatioInspector(
     selectedRatio: AspectRatioPreset,
     selectedFitMode: CanvasFitMode,
     onSelectRatio: (AspectRatioPreset) -> Unit,
-    onSelectFitMode: (CanvasFitMode) -> Unit
+    onSelectFitMode: (CanvasFitMode) -> Unit,
+    onPickCanvasImage: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -604,8 +702,8 @@ private fun AspectRatioInspector(
                 Surface(
                     onClick = { onSelectRatio(ratio) },
                     shape = RoundedCornerShape(12.dp),
-                    color = if (selected) ElectricCyan.copy(alpha = 0.16f) else StudioCard,
-                    border = BorderStroke(1.5.dp, if (selected) ElectricCyan else StudioBorder),
+                    color = if (selected) EnergyOrangeSoft else StudioCard,
+                    border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder),
                     modifier = Modifier.testTag("ratio_chip_${ratio.name.lowercase()}")
                 ) {
                     Column(
@@ -615,7 +713,8 @@ private fun AspectRatioInspector(
                         Text(
                             text = ratio.label,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (selected) ElectricCyan else TextPrimary
+                            color = if (selected) EnergyOrange else PureWhite,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = ratio.subtitle,
@@ -626,21 +725,29 @@ private fun AspectRatioInspector(
                 }
             }
         }
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp),
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Mode Kanvas:", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-            CanvasFitMode.entries.forEach { mode ->
+            item {
+                Text("Mode Kanvas:", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+            }
+            items(CanvasFitMode.entries) { mode ->
                 val active = mode == selectedFitMode
                 FilterChip(
                     selected = active,
-                    onClick = { onSelectFitMode(mode) },
+                    onClick = {
+                        if (mode == CanvasFitMode.CUSTOM_IMAGE) {
+                            onPickCanvasImage()
+                        } else {
+                            onSelectFitMode(mode)
+                        }
+                    },
                     label = { Text(mode.label) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ElectricCyan.copy(alpha = 0.18f),
-                        selectedLabelColor = ElectricCyan
+                        selectedContainerColor = EnergyOrangeSoft,
+                        selectedLabelColor = EnergyOrange
                     )
                 )
             }
@@ -662,13 +769,13 @@ private fun TransitionInspector(
             Surface(
                 onClick = { onSelectTransition(transition) },
                 shape = RoundedCornerShape(12.dp),
-                color = if (selected) ElectricCyan.copy(alpha = 0.16f) else StudioCard,
-                border = BorderStroke(1.5.dp, if (selected) ElectricCyan else StudioBorder)
+                color = if (selected) EnergyOrangeSoft else StudioCard,
+                border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder)
             ) {
                 Text(
                     text = transition.label,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) ElectricCyan else TextPrimary,
+                    color = if (selected) EnergyOrange else TextPrimary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                 )
             }
@@ -679,37 +786,57 @@ private fun TransitionInspector(
 @Composable
 private fun CanvasBgInspector(
     selectedColorHex: Long,
-    onSelectColor: (Long) -> Unit
+    hasCustomImage: Boolean,
+    onSelectColor: (Long) -> Unit,
+    onPickCanvasImage: () -> Unit
 ) {
     val swatches = listOf(
-        0xFF000000L,
-        0xFF151924L,
+        0xFF0B0B0DL,
+        0xFF16161AL,
         0xFFFFFFFFL,
-        0xFF0A2E36L,
-        0xFF3E1226L,
-        0xFF21163DL
+        0xFFFF6B00L,
+        0xFF28190BL,
+        0xFF1E2430L
     )
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Latar Kanvas:", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-        swatches.forEach { hex ->
-            val selected = hex == selectedColorHex
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color(hex))
-                    .border(
-                        width = if (selected) 2.5.dp else 1.dp,
-                        color = if (selected) ElectricCyan else StudioBorder,
-                        shape = CircleShape
-                    )
-                    .clickable { onSelectColor(hex) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Latar Kanvas:", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
+            swatches.forEach { hex ->
+                val selected = hex == selectedColorHex && !hasCustomImage
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(hex))
+                        .border(
+                            width = if (selected) 2.5.dp else 1.dp,
+                            color = if (selected) EnergyOrange else StudioBorder,
+                            shape = CircleShape
+                        )
+                        .clickable { onSelectColor(hex) }
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = onPickCanvasImage,
+            border = BorderStroke(1.dp, EnergyOrange),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Filled.Image, contentDescription = null, tint = EnergyOrange, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (hasCustomImage) "Ganti Gambar Latar Kustom" else "Pilih Gambar Latar Kustom",
+                color = EnergyOrange,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }

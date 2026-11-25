@@ -98,11 +98,12 @@ import com.example.model.VideoEffectPreset
 import com.example.model.interpolateKeyframes
 import com.example.ui.common.buildComposeColorMatrix
 import com.example.ui.common.formatTimecodeMs
-import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.JetBrainsMonoFontFamily
-import com.example.ui.theme.NeonCoral
 import com.example.ui.theme.OutfitFontFamily
 import com.example.ui.theme.PlusJakartaFontFamily
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioObsidian
@@ -205,6 +206,7 @@ fun EditorPreviewStage(
         activeClip?.trimEndMs,
         activeClip?.rotationDegrees,
         activeClip?.isMirrored,
+        activeClip?.cropScale,
         activeClip?.keyframes,
         timeline.filterPreset,
         timeline.videoEffect,
@@ -411,7 +413,7 @@ fun EditorPreviewStage(
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (activeClip?.chromaKey?.enabled == true || activeClip?.chromaKey?.autoRemoveBg == true) {
-                                Color(0xFF151924)
+                                Color(0xFF16161A)
                             } else {
                                 Color(timeline.canvasBgHex)
                             }
@@ -427,8 +429,15 @@ fun EditorPreviewStage(
                     val stageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }.coerceAtLeast(1f)
                     val stageHeightPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
 
-                    // Optional Blur Background Fill
-                    if (timeline.canvasFitMode == CanvasFitMode.BLUR_BG && activeClip != null) {
+                    // Optional Custom Canvas Image or Blur Background Fill
+                    if (timeline.canvasFitMode == CanvasFitMode.CUSTOM_IMAGE && !timeline.canvasBgImageUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = Uri.parse(timeline.canvasBgImageUri),
+                            contentDescription = "Latar kanvas kustom",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (timeline.canvasFitMode == CanvasFitMode.BLUR_BG && activeClip != null) {
                         AsyncImage(
                             model = Uri.parse(activeClip.uriString),
                             contentDescription = null,
@@ -446,13 +455,15 @@ fun EditorPreviewStage(
                             if (timeline.videoEffect == VideoEffectPreset.BLUR) Modifier.blur(6.dp) else Modifier
                         )
                         .graphicsLayer {
-                            if (activeClip?.isImage == true && clipKeyframe != null) {
-                                scaleX = clipKeyframe.scale * (if (activeClip.isMirrored) -1f else 1f)
-                                scaleY = clipKeyframe.scale
-                                rotationZ = activeClip.rotationDegrees.toFloat() + clipKeyframe.rotationDeg
-                                translationX = clipKeyframe.xOffset * stageWidthPx
-                                translationY = clipKeyframe.yOffset * stageHeightPx
-                                alpha = clipKeyframe.opacity
+                            if (activeClip?.isImage == true) {
+                                val kfScale = clipKeyframe?.scale ?: 1f
+                                val crop = activeClip.cropScale.coerceIn(1f, 2.5f)
+                                scaleX = kfScale * crop * (if (activeClip.isMirrored) -1f else 1f)
+                                scaleY = kfScale * crop
+                                rotationZ = activeClip.rotationDegrees.toFloat() + (clipKeyframe?.rotationDeg ?: 0f)
+                                translationX = (clipKeyframe?.xOffset ?: 0f) * stageWidthPx
+                                translationY = (clipKeyframe?.yOffset ?: 0f) * stageHeightPx
+                                alpha = clipKeyframe?.opacity ?: 1f
                             } else if (clipKeyframe != null) {
                                 alpha = clipKeyframe.opacity
                             }
@@ -500,7 +511,7 @@ fun EditorPreviewStage(
                                 val py = ((i * 41 + 17) % 100) / 100f * size.height
                                 val r = (3f + 4f * kotlin.math.abs(sin(fxPhase + i))).dp.toPx()
                                 drawCircle(
-                                    color = Color.White.copy(alpha = 0.65f),
+                                    color = GoldAccent.copy(alpha = 0.72f),
                                     radius = r,
                                     center = Offset(px, py)
                                 )
@@ -526,7 +537,7 @@ fun EditorPreviewStage(
                     if (activeClip?.chromaKey?.enabled == true || activeClip?.chromaKey?.autoRemoveBg == true) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = Color.Black.copy(alpha = 0.68f),
+                            color = Color.Black.copy(alpha = 0.72f),
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(8.dp)
@@ -534,7 +545,7 @@ fun EditorPreviewStage(
                             Text(
                                 text = if (activeClip.chromaKey.autoRemoveBg) "Auto BG Aktif" else "Chroma Key Aktif",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = ElectricCyan,
+                                color = EnergyOrange,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -559,8 +570,8 @@ fun EditorPreviewStage(
                                 .clip(RoundedCornerShape(8.dp))
                                 .alpha(pip.opacity)
                                 .then(
-                                    if (pipSelected) Modifier.border(2.dp, NeonCoral, RoundedCornerShape(8.dp))
-                                    else Modifier.border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                    if (pipSelected) Modifier.border(2.dp, EnergyOrange, RoundedCornerShape(8.dp))
+                                    else Modifier.border(1.dp, PureWhite.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                                 )
                                 .pointerInput(pip.id) {
                                     detectTapGestures { onSelectPip(pip.id) }
@@ -583,7 +594,8 @@ fun EditorPreviewStage(
                                 colorFilter = when (pip.blendMode) {
                                     BlendModePreset.SCREEN -> ColorFilter.tint(Color.White.copy(alpha = 0.2f), BlendMode.Screen)
                                     BlendModePreset.MULTIPLY -> ColorFilter.tint(Color.Gray.copy(alpha = 0.3f), BlendMode.Multiply)
-                                    BlendModePreset.OVERLAY -> ColorFilter.tint(ElectricCyan.copy(alpha = 0.15f), BlendMode.Overlay)
+                                    BlendModePreset.OVERLAY -> ColorFilter.tint(EnergyOrange.copy(alpha = 0.16f), BlendMode.Overlay)
+                                    BlendModePreset.LIGHTEN -> ColorFilter.tint(Color.White.copy(alpha = 0.22f), BlendMode.Lighten)
                                     BlendModePreset.NORMAL -> null
                                 },
                                 modifier = Modifier.fillMaxSize()
@@ -591,15 +603,17 @@ fun EditorPreviewStage(
                         }
                     }
 
-                    // Active Text Overlays with Font Style, Shadow, and Animations
+                    // Active Text & Comic Sticker Overlays
                     val visibleTexts = timeline.textOverlays.filter {
                         currentPositionMs in it.startMs..it.endMs
                     }
                     visibleTexts.forEach { item ->
                         val isSelected = item.id == selectedTextId
                         val elapsed = (currentPositionMs - item.startMs).coerceAtLeast(0L)
+                        val remaining = (item.endMs - currentPositionMs).coerceAtLeast(0L)
                         val animAlpha = when (item.animation) {
                             TextAnimationType.FADE -> (elapsed / 400f).coerceIn(0f, 1f)
+                            TextAnimationType.FADE_OUT -> (remaining / 400f).coerceIn(0f, 1f)
                             else -> 1f
                         }
                         val animScale = when (item.animation) {
@@ -617,6 +631,12 @@ fun EditorPreviewStage(
                             TextFontStyle.MONO -> JetBrainsMonoFontFamily
                         }
 
+                        val shape = if (item.isSticker) {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 2.dp)
+                        } else {
+                            RoundedCornerShape(8.dp)
+                        }
+
                         Box(
                             modifier = Modifier
                                 .offset {
@@ -629,13 +649,20 @@ fun EditorPreviewStage(
                                     alpha = animAlpha
                                     scaleX = animScale
                                     scaleY = animScale
+                                    rotationZ = item.curveDegrees
                                 }
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(shape)
                                 .background(Color(item.bgColorHex))
                                 .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.5.dp, ElectricCyan, RoundedCornerShape(8.dp))
-                                    } else Modifier
+                                    when {
+                                        isSelected -> Modifier.border(1.5.dp, EnergyOrange, shape)
+                                        item.isSticker || item.strokeEnabled -> Modifier.border(
+                                            width = 1.dp,
+                                            color = if (item.isSticker) GoldAccent else Color(item.strokeColorHex).copy(alpha = 0.55f),
+                                            shape = shape
+                                        )
+                                        else -> Modifier
+                                    }
                                 )
                                 .pointerInput(item.id) {
                                     detectTapGestures { onSelectText(item.id) }
@@ -652,17 +679,51 @@ fun EditorPreviewStage(
                                 }
                                 .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
-                            Text(
-                                text = item.text,
-                                style = TextStyle(
+                            val textBrush = if (item.useGradient) {
+                                Brush.horizontalGradient(listOf(PureWhite, EnergyOrange, GoldAccent))
+                            } else null
+                            val textStyle = if (textBrush != null) {
+                                TextStyle(
+                                    brush = textBrush,
                                     fontFamily = fontFamily,
                                     fontSize = (item.fontSizeSp * 0.72f).sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(item.colorHex),
                                     shadow = if (item.hasShadow) {
                                         Shadow(Color.Black.copy(alpha = 0.85f), Offset(2f, 2f), 4f)
                                     } else null
                                 )
+                            } else {
+                                TextStyle(
+                                    color = Color(item.colorHex),
+                                    fontFamily = fontFamily,
+                                    fontSize = (item.fontSizeSp * 0.72f).sp,
+                                    fontWeight = FontWeight.Bold,
+                                    shadow = if (item.hasShadow) {
+                                        Shadow(Color.Black.copy(alpha = 0.85f), Offset(2f, 2f), 4f)
+                                    } else null
+                                )
+                            }
+                            Text(
+                                text = item.text,
+                                style = textStyle
+                            )
+                        }
+                    }
+
+                    // Live Watermark Preview when enabled
+                    if (timeline.includeWatermark) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.55f),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = "Dibuat dengan Komik Narasi",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = PureWhite.copy(alpha = 0.85f),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -711,7 +772,7 @@ fun EditorPreviewStage(
                 Surface(
                     onClick = onTogglePlayPause,
                     shape = CircleShape,
-                    color = ElectricCyan,
+                    color = EnergyOrange,
                     modifier = Modifier
                         .size(38.dp)
                         .testTag("editor_play_pause_button")
@@ -720,7 +781,7 @@ fun EditorPreviewStage(
                         Icon(
                             imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (isPlaying) "Jeda" else "Putar",
-                            tint = Color(0xFF041318),
+                            tint = PureWhite,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -735,7 +796,7 @@ fun EditorPreviewStage(
                     Icon(
                         imageVector = if (isPreviewMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
                         contentDescription = if (isPreviewMuted) "Suara Aktif" else "Bisukan Preview",
-                        tint = if (isPreviewMuted) TextSecondary else ElectricCyan,
+                        tint = if (isPreviewMuted) TextSecondary else EnergyOrange,
                         modifier = Modifier.size(20.dp)
                     )
                 }

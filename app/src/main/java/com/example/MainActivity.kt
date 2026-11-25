@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.example.ai.configureAppCheck
 import com.example.ui.navigation.VeloCutNavGraph
-import com.example.ui.theme.VeloCutTheme
+import com.example.ui.theme.KomikNarasiTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
         setContent {
-            VeloCutTheme {
+            KomikNarasiTheme {
                 VeloCutNavGraph()
             }
         }

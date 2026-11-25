@@ -140,6 +140,13 @@ class VoiceEffectsAudioProcessor(
                 delayWriteIdx = (delayWriteIdx + 1) % delayBuffer.size
                 s = warm
             }
+            VoiceEffectPreset.MEGAPHONE -> {
+                val boosted = (s * 1.55f).coerceIn(-0.85f, 0.85f)
+                val delayed = delayBuffer[delayWriteIdx]
+                delayBuffer[delayWriteIdx] = boosted * 0.5f
+                delayWriteIdx = (delayWriteIdx + 1) % delayBuffer.size
+                s = (boosted - delayed * 0.25f).coerceIn(-1f, 1f)
+            }
             else -> {}
         }
         return s

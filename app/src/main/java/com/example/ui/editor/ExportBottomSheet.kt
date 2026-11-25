@@ -1,15 +1,20 @@
 package com.example.ui.editor
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -20,16 +25,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -39,9 +46,13 @@ import com.example.model.ExportBitrate
 import com.example.model.ExportFrameRate
 import com.example.model.ExportResolution
 import com.example.ui.common.formatFileSize
-import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.CrimsonAlert
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.EnergyOrangeSoft
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.KomikNarasiProgressGradient
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioSurfaceElevated
@@ -55,10 +66,12 @@ fun ExportBottomSheet(
     resolution: ExportResolution,
     frameRate: ExportFrameRate,
     bitrate: ExportBitrate,
+    includeWatermark: Boolean,
     exportState: ExportState,
     onSelectResolution: (ExportResolution) -> Unit,
     onSelectFrameRate: (ExportFrameRate) -> Unit,
     onSelectBitrate: (ExportBitrate) -> Unit,
+    onToggleWatermark: (Boolean) -> Unit,
     onStartExport: () -> Unit,
     onCancelExport: () -> Unit,
     onSaveToGallery: (ExportEntity) -> Unit,
@@ -80,24 +93,29 @@ fun ExportBottomSheet(
             when (exportState) {
                 ExportState.Idle -> {
                     Text(
-                        text = "Pengaturan Ekspor MP4",
+                        text = "Ekspor Komik Narasi Studio",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold
                     )
 
-                    Text("Resolusi", style = MaterialTheme.typography.labelLarge, color = TextSecondary)
-                    Row(
+                    Text(
+                        text = "Resolusi (Default 720p ringan untuk HP entry-level)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary
+                    )
+                    LazyRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ExportResolution.entries.forEach { res ->
+                        items(ExportResolution.entries) { res ->
                             val selected = res == resolution
                             Surface(
                                 onClick = { onSelectResolution(res) },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (selected) ElectricCyan.copy(alpha = 0.16f) else StudioCard,
-                                border = BorderStroke(1.5.dp, if (selected) ElectricCyan else StudioBorder),
-                                modifier = Modifier.weight(1f)
+                                color = if (selected) EnergyOrangeSoft else StudioCard,
+                                border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder),
+                                modifier = Modifier.width(104.dp)
                             ) {
                                 Column(
                                     modifier = Modifier.padding(10.dp),
@@ -106,12 +124,14 @@ fun ExportBottomSheet(
                                     Text(
                                         text = res.badge,
                                         style = MaterialTheme.typography.titleMedium,
-                                        color = if (selected) ElectricCyan else TextPrimary
+                                        color = if (selected) EnergyOrange else PureWhite,
+                                        fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = res.label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
+                                        color = TextSecondary,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -128,14 +148,14 @@ fun ExportBottomSheet(
                             Surface(
                                 onClick = { onSelectFrameRate(fps) },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (selected) ElectricCyan.copy(alpha = 0.16f) else StudioCard,
-                                border = BorderStroke(1.5.dp, if (selected) ElectricCyan else StudioBorder),
+                                color = if (selected) EnergyOrangeSoft else StudioCard,
+                                border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
                                     text = fps.label,
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = if (selected) ElectricCyan else TextPrimary,
+                                    color = if (selected) EnergyOrange else TextPrimary,
                                     modifier = Modifier.padding(vertical = 10.dp, horizontal = 12.dp)
                                 )
                             }
@@ -152,25 +172,62 @@ fun ExportBottomSheet(
                             Surface(
                                 onClick = { onSelectBitrate(br) },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (selected) ElectricCyan.copy(alpha = 0.16f) else StudioCard,
-                                border = BorderStroke(1.5.dp, if (selected) ElectricCyan else StudioBorder),
+                                color = if (selected) EnergyOrangeSoft else StudioCard,
+                                border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
                                     text = br.label,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (selected) ElectricCyan else TextPrimary,
+                                    color = if (selected) EnergyOrange else TextPrimary,
                                     modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp)
                                 )
                             }
                         }
                     }
 
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = StudioCard,
+                        border = BorderStroke(1.dp, StudioBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Watermark \"Dibuat dengan Komik Narasi\"",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = PureWhite
+                                )
+                                Text(
+                                    text = "Opsional — matikan untuk ekspor bersih tanpa watermark",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            Switch(
+                                checked = includeWatermark,
+                                onCheckedChange = onToggleWatermark,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = PureWhite,
+                                    checkedTrackColor = EnergyOrange
+                                ),
+                                modifier = Modifier.testTag("export_watermark_switch")
+                            )
+                        }
+                    }
+
                     Button(
                         onClick = onStartExport,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ElectricCyan,
-                            contentColor = Color(0xFF041318)
+                            containerColor = EnergyOrange,
+                            contentColor = PureWhite
                         ),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
@@ -183,31 +240,40 @@ fun ExportBottomSheet(
                 }
 
                 is ExportState.Exporting -> {
-                    val pct = (exportState.progress * 100).toInt().coerceIn(0, 100)
+                    val clampedProgress = exportState.progress.coerceIn(0.02f, 1f)
+                    val pct = (clampedProgress * 100).toInt().coerceIn(0, 100)
                     Text(
-                        text = "Sedang Merender Video... $pct%",
+                        text = "Merender Komik Narasi... $pct%",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold
                     )
-                    LinearProgressIndicator(
-                        progress = { exportState.progress },
-                        color = ElectricCyan,
-                        trackColor = StudioCard,
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(8.dp)
-                    )
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(StudioCard)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(clampedProgress)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(KomikNarasiProgressGradient)
+                        )
+                    }
                     Text(
-                        text = "Menggabungkan klip, efek warna, audio DSP, dan teks overlay ke MP4.",
+                        text = "Komik Narasi Pro Engine menggabungkan klip, narasi TTS/DSP, efek warna, dan overlay ke MP4.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
                     OutlinedButton(
                         onClick = onCancelExport,
-                        border = BorderStroke(1.dp, NeonCoral),
+                        border = BorderStroke(1.dp, CrimsonAlert),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Batalkan Ekspor", color = NeonCoral)
+                        Text("Batalkan Ekspor", color = CrimsonAlert)
                     }
                 }
 
@@ -227,12 +293,13 @@ fun ExportBottomSheet(
                             Text(
                                 text = "Ekspor Selesai!",
                                 style = MaterialTheme.typography.titleLarge,
-                                color = TextPrimary
+                                color = PureWhite,
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "${entity.resolutionLabel} · ${formatFileSize(entity.fileSizeBytes)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = ElectricCyan
+                                color = GoldAccent
                             )
                         }
                     }
@@ -256,8 +323,8 @@ fun ExportBottomSheet(
                         Button(
                             onClick = { onShare(entity) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ElectricCyan,
-                                contentColor = Color(0xFF041318)
+                                containerColor = EnergyOrange,
+                                contentColor = PureWhite
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -280,8 +347,8 @@ fun ExportBottomSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Filled.ErrorOutline, null, tint = NeonCoral, modifier = Modifier.size(28.dp))
-                        Text("Ekspor Gagal", style = MaterialTheme.typography.titleLarge, color = NeonCoral)
+                        Icon(Icons.Filled.ErrorOutline, null, tint = CrimsonAlert, modifier = Modifier.size(28.dp))
+                        Text("Ekspor Gagal", style = MaterialTheme.typography.titleLarge, color = CrimsonAlert)
                     }
                     Text(
                         text = exportState.message,
@@ -290,7 +357,7 @@ fun ExportBottomSheet(
                     )
                     Button(
                         onClick = onStartExport,
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color(0xFF041318)),
+                        colors = ButtonDefaults.buttonColors(containerColor = EnergyOrange, contentColor = PureWhite),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Coba Lagi")

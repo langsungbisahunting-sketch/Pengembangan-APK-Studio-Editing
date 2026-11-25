@@ -27,7 +27,7 @@ sealed interface AiTaskResult<out T> {
     data class Error(val message: String) : AiTaskResult<Nothing>
 }
 
-class VeloCutAiService {
+class KomikNarasiAiService {
 
     private val captionSchema = Schema.obj(
         properties = mapOf(
@@ -76,6 +76,40 @@ class VeloCutAiService {
             }
         )
     }
+
+    private val scriptModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.8-flash"
+        )
+    }
+
+    suspend fun polishComicNarrationScript(rawDraft: String): AiTaskResult<String> =
+        withContext(Dispatchers.IO) {
+            val clean = rawDraft.trim()
+            if (clean.isEmpty()) {
+                return@withContext AiTaskResult.Error("Tulis ide cerita atau dialog komik terlebih dahulu.")
+            }
+            try {
+                val response = withTimeout(45_000L) {
+                    scriptModel.generateContent(
+                        "Ubah teks berikut menjadi naskah narasi komik berbahasa Indonesia yang dramatis, mengalir, padat, dan siap dibacakan oleh narator video pendek (maksimal 2-3 kalimat, tanpa tanda kurung atau catatan panggung):\n$clean"
+                    )
+                }
+                val resultText = response.text?.trim()
+                if (resultText.isNullOrEmpty()) {
+                    AiTaskResult.Error("AI tidak mengembalikan naskah narasi.")
+                } else {
+                    AiTaskResult.Success(resultText)
+                }
+            } catch (e: TimeoutCancellationException) {
+                AiTaskResult.Error("Pembuatan naskah AI melebihi batas waktu.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Script polish failed", e)
+                AiTaskResult.Error(e.localizedMessage ?: "Gagal menyusun naskah narasi AI.")
+            }
+        }
 
     suspend fun generateAutoCaptions(
         context: Context,
@@ -197,6 +231,8 @@ class VeloCutAiService {
     }
 
     companion object {
-        private const val TAG = "VeloCutAiService"
+        private const val TAG = "KomikNarasiAiService"
     }
 }
+
+typealias VeloCutAiService = KomikNarasiAiService

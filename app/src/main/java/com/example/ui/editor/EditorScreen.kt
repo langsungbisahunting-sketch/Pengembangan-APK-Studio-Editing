@@ -8,10 +8,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,8 +21,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AlertDialog
@@ -43,13 +47,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
-import com.example.ui.theme.ElectricCyan
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.CrimsonAlert
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.EnergyOrangeSoft
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioObsidian
@@ -110,6 +118,12 @@ fun EditorScreen(
         uri?.let { viewModel.addPipOverlayFromUri(it) }
     }
 
+    val canvasBgPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.setCanvasBackgroundImage(it) }
+    }
+
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -128,7 +142,7 @@ fun EditorScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = ElectricCyan)
+                CircularProgressIndicator(color = EnergyOrange)
             }
             return@Scaffold
         }
@@ -176,16 +190,16 @@ fun EditorScreen(
                     onMoveText = viewModel::moveTextOverlayPosition,
                     onSelectPip = viewModel::selectPipOverlay,
                     onMovePip = viewModel::movePipOverlay,
-                    modifier = Modifier.weight(if (isFullscreenPreview) 1f else 0.48f)
+                    modifier = Modifier.weight(if (isFullscreenPreview) 1f else 0.46f)
                 )
 
                 if (!isFullscreenPreview) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(30.dp)
+                            .height(34.dp)
                             .background(StudioSurface)
-                            .padding(horizontal = 14.dp),
+                            .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -194,7 +208,35 @@ fun EditorScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val snapOn = uiState.timeline.snapToGrid
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (snapOn) EnergyOrangeSoft else StudioCard)
+                                    .clickable { viewModel.toggleSnapToGrid() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .testTag("timeline_snap_toggle"),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.GridOn,
+                                    contentDescription = "Snap to Grid",
+                                    tint = if (snapOn) EnergyOrange else TextSecondary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Snap",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (snapOn) EnergyOrange else TextSecondary,
+                                    fontWeight = if (snapOn) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+
                             IconButton(
                                 onClick = { viewModel.setTimelineZoom(uiState.timelineZoom - 0.3f) },
                                 modifier = Modifier.size(30.dp)
@@ -204,7 +246,8 @@ fun EditorScreen(
                             Text(
                                 text = "${String.format(java.util.Locale.US, "%.1fx", uiState.timelineZoom)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = ElectricCyan
+                                color = EnergyOrange,
+                                fontWeight = FontWeight.Bold
                             )
                             IconButton(
                                 onClick = { viewModel.setTimelineZoom(uiState.timelineZoom + 0.3f) },
@@ -238,11 +281,7 @@ fun EditorScreen(
                             )
                         },
                         onAddAudioClick = {
-                            if (uiState.timeline.audioTrack == null) {
-                                viewModel.setActiveToolTab(EditorToolTab.AUDIO)
-                            } else {
-                                viewModel.setActiveToolTab(EditorToolTab.AUDIO)
-                            }
+                            viewModel.setActiveToolTab(EditorToolTab.AUDIO)
                         },
                         modifier = Modifier
                             .weight(0.36f)
@@ -253,8 +292,11 @@ fun EditorScreen(
                         uiState = uiState,
                         onSplitClip = viewModel::splitClipAtPlayhead,
                         onTrimClip = viewModel::updateSelectedClipTrim,
+                        onCropClip = viewModel::updateSelectedClipCrop,
                         onSpeedChange = viewModel::updateSelectedClipSpeed,
                         onSpeedCurveChange = viewModel::updateSelectedClipSpeedCurve,
+                        onToggleSmoothSlowMo = viewModel::toggleSelectedClipSmoothSlowMo,
+                        onToggleReverseClip = viewModel::toggleReverseSelectedClip,
                         onClipVolumeChange = viewModel::updateSelectedClipVolume,
                         onExtractAudio = viewModel::extractAudioFromSelectedClip,
                         onRotateClip = viewModel::rotateSelectedClip,
@@ -272,8 +314,10 @@ fun EditorScreen(
                         onToggleClipNoiseReduction = viewModel::toggleSelectedClipNoiseReduction,
                         onToggleAudioFade = viewModel::toggleAudioFade,
                         onRemoveAudio = viewModel::removeAudioTrack,
-                        onAddText = { txt, fg, bg, styleId ->
-                            viewModel.addTextOverlay(txt, fg, bg, styleId)
+                        onSynthesizeTtsNarration = viewModel::synthesizeTtsNarration,
+                        onPolishNarrationScript = viewModel::polishNarrationScriptWithAi,
+                        onAddText = { txt, fg, bg, styleId, useGradient, isSticker ->
+                            viewModel.addTextOverlay(txt, fg, bg, styleId, useGradient, isSticker)
                         },
                         onUpdateSelectedText = viewModel::updateSelectedTextOverlay,
                         onDeleteSelectedText = viewModel::deleteSelectedTextOverlay,
@@ -295,7 +339,12 @@ fun EditorScreen(
                         onSelectRatio = viewModel::setAspectRatio,
                         onSelectFitMode = viewModel::setCanvasFitMode,
                         onSelectTransition = viewModel::setSelectedClipTransition,
-                        onSelectCanvasColor = viewModel::setCanvasBackground
+                        onSelectCanvasColor = viewModel::setCanvasBackground,
+                        onPickCanvasImage = {
+                            canvasBgPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
                     )
 
                     EditorBottomToolDock(
@@ -306,27 +355,27 @@ fun EditorScreen(
                 }
             }
 
-            // Transparent AI Loading / Error Overlay
+            // Transparent AI / TTS Loading & Error Overlay
             when (val aiState = uiState.aiTaskState) {
                 is AiTaskState.Loading -> {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.65f)),
+                            .background(Color.Black.copy(alpha = 0.7f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = StudioCard,
-                            border = BorderStroke(1.dp, ElectricCyan)
+                            border = BorderStroke(1.dp, EnergyOrange)
                         ) {
                             Column(
                                 modifier = Modifier.padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                CircularProgressIndicator(color = ElectricCyan)
-                                Text(aiState.label, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                                CircularProgressIndicator(color = EnergyOrange)
+                                Text(aiState.label, style = MaterialTheme.typography.titleMedium, color = PureWhite)
                             }
                         }
                     }
@@ -335,11 +384,11 @@ fun EditorScreen(
                     AlertDialog(
                         onDismissRequest = viewModel::clearAiError,
                         containerColor = StudioCard,
-                        title = { Text("Proses AI Gagal", color = NeonCoral) },
+                        title = { Text("Proses AI / Suara Gagal", color = CrimsonAlert) },
                         text = { Text(aiState.message, color = TextSecondary) },
                         confirmButton = {
                             TextButton(onClick = viewModel::clearAiError) {
-                                Text("Tutup", color = ElectricCyan)
+                                Text("Tutup", color = EnergyOrange)
                             }
                         }
                     )
@@ -354,7 +403,7 @@ fun EditorScreen(
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
             containerColor = StudioCard,
-            title = { Text("Ubah Nama Proyek", color = TextPrimary) },
+            title = { Text("Ubah Nama Proyek", color = PureWhite) },
             text = {
                 OutlinedTextField(
                     value = titleDraft,
@@ -370,7 +419,7 @@ fun EditorScreen(
                         showRenameDialog = false
                     }
                 ) {
-                    Text("Simpan", color = ElectricCyan)
+                    Text("Simpan", color = EnergyOrange)
                 }
             },
             dismissButton = {
@@ -386,10 +435,12 @@ fun EditorScreen(
             resolution = uiState.exportResolution,
             frameRate = uiState.exportFrameRate,
             bitrate = uiState.exportBitrate,
+            includeWatermark = uiState.timeline.includeWatermark,
             exportState = uiState.exportState,
             onSelectResolution = viewModel::setExportResolution,
             onSelectFrameRate = viewModel::setExportFrameRate,
             onSelectBitrate = viewModel::setExportBitrate,
+            onToggleWatermark = viewModel::toggleExportWatermark,
             onStartExport = viewModel::startExport,
             onCancelExport = viewModel::cancelExport,
             onSaveToGallery = viewModel::saveExportToGallery,

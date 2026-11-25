@@ -15,14 +15,15 @@ enum class AspectRatioPreset(
     RATIO_16_9("16:9", 16f, 9f, "YouTube"),
     RATIO_1_1("1:1", 1f, 1f, "Instagram"),
     RATIO_4_5("4:5", 4f, 5f, "Feed IG"),
-    RATIO_3_4("3:4", 3f, 4f, "Portrait"),
+    RATIO_3_4("3:4", 3f, 4f, "Panel Komik"),
     ORIGINAL("Asli", 9f, 16f, "Original")
 }
 
 @Serializable
 enum class CanvasFitMode(val label: String) {
     AUTO_FIT("Auto-Fit"),
-    BLUR_BG("Blur Latar")
+    BLUR_BG("Blur Latar"),
+    CUSTOM_IMAGE("Gambar Latar")
 }
 
 @Serializable
@@ -35,13 +36,14 @@ enum class FilterPreset(
     val isGrayscale: Boolean = false
 ) {
     NONE("Asli", 0f, 0f, 0f, 0f),
-    CINEMATIC("Sinematik", -0.05f, 0.22f, -0.15f, -6f),
-    WARM_SUN("Hangat", 0.06f, 0.10f, 0.25f, 12f),
-    COOL_MINT("Dingin", 0.03f, 0.12f, 0.05f, -18f),
+    KOMIK_POP("Komik Pop", 0.04f, 0.24f, 0.42f, 4f),
+    KOMIK_NOIR("Noir Komik", -0.04f, 0.34f, -1f, 0f, isGrayscale = true),
+    CINEMATIC("KN Sinematik", -0.05f, 0.22f, -0.14f, -6f),
+    WARM_SUN("Oranye Senja", 0.05f, 0.12f, 0.28f, 14f),
+    COOL_MINT("Biru Malam", 0.02f, 0.14f, 0.05f, -18f),
     VIVID("Vivid", 0.05f, 0.18f, 0.45f, 0f),
     BW_CLASSIC("B&W", 0.02f, 0.28f, -1f, 0f, isGrayscale = true),
-    SEPIA("Retro", -0.02f, 0.14f, -0.35f, 22f),
-    CYBER("Cyber", -0.04f, 0.30f, 0.35f, -35f)
+    SEPIA("Retro", -0.02f, 0.14f, -0.35f, 22f)
 }
 
 @Serializable
@@ -58,6 +60,8 @@ enum class TransitionType(val label: String) {
     NONE("Tanpa"),
     DISSOLVE("Dissolve"),
     ZOOM_IN("Zoom"),
+    SLIDE("Slide"),
+    PAGE_TURN("Balik Halaman"),
     GLITCH("Glitch"),
     WHIP_PAN("Whip Pan"),
     FADE_BLACK("Fade")
@@ -83,33 +87,42 @@ enum class SpeedCurvePreset(val label: String, val points: List<Float>) {
 @Serializable
 enum class VoiceEffectPreset(val label: String, val pitchMultiplier: Float) {
     NONE("Normal", 1.0f),
+    DEEP("Narator Berat", 0.74f),
     CHIPMUNK("Chipmunk", 1.45f),
-    DEEP("Deep", 0.72f),
     ROBOT("Robot", 1.0f),
+    STUDIO("Studio Pro", 1.0f),
     ECHO("Echo", 1.0f),
-    STUDIO("Studio", 1.0f)
+    MEGAPHONE("Megaphone", 1.08f)
 }
 
 @Serializable
 enum class VocalSeparationMode(val label: String) {
     ORIGINAL("Campuran"),
-    VOCAL_ONLY("Vokal Saja"),
+    VOCAL_ONLY("Vokal / Narasi"),
     INSTRUMENTAL_ONLY("Musik / BGM")
+}
+
+enum class TtsVoiceStyle(val label: String, val pitch: Float, val rate: Float) {
+    NARATOR_BERAT("Narator Berat", 0.78f, 0.94f),
+    EKSPRESIF("Komik Ekspresif", 1.08f, 1.04f),
+    TENANG("Story Tenang", 0.94f, 0.88f),
+    CEPAT("Rekap Cepat", 1.02f, 1.22f)
 }
 
 @Serializable
 enum class TextFontStyle(val label: String) {
     MODERN("Outfit Bold"),
     CLEAN("Jakarta Sans"),
-    MONO("Studio Mono")
+    MONO("Komik Mono")
 }
 
 @Serializable
 enum class TextAnimationType(val label: String) {
     NONE("Tanpa"),
     FADE("Fade In"),
-    POP("Pop"),
+    POP("Pop In"),
     SLIDE_UP("Slide Up"),
+    FADE_OUT("Fade Out"),
     PULSE_LOOP("Pulse Loop")
 }
 
@@ -118,12 +131,15 @@ enum class BlendModePreset(val label: String) {
     NORMAL("Normal"),
     SCREEN("Screen"),
     MULTIPLY("Multiply"),
-    OVERLAY("Overlay")
+    OVERLAY("Overlay"),
+    LIGHTEN("Lighten")
 }
 
 enum class ExportResolution(val label: String, val heightPx: Int, val badge: String) {
-    HD_720("720p HD", 720, "720P"),
+    SD_480("480p Ringan", 480, "480P"),
+    HD_720("720p HD (Disarankan)", 720, "720P"),
     FHD_1080("1080p Full HD", 1080, "1080P"),
+    QHD_2K("2K QHD", 1440, "2K"),
     UHD_4K("4K Ultra HD", 2160, "4K")
 }
 
@@ -206,12 +222,15 @@ data class VideoClip(
     val trimEndMs: Long = 5000L,
     val speed: Float = 1.0f,
     val speedCurve: SpeedCurvePreset = SpeedCurvePreset.NORMAL,
+    val smoothSlowMo: Boolean = false,
     val volume: Float = 1.0f,
     val voiceEffect: VoiceEffectPreset = VoiceEffectPreset.NONE,
     val vocalMode: VocalSeparationMode = VocalSeparationMode.ORIGINAL,
     val noiseReduction: Boolean = false,
+    val cropScale: Float = 1.0f,
     val rotationDegrees: Int = 0,
     val isMirrored: Boolean = false,
+    val isReversed: Boolean = false,
     val transitionOut: TransitionType = TransitionType.NONE,
     val chromaKey: ChromaKeyConfig = ChromaKeyConfig(),
     val keyframes: List<KeyframePoint> = emptyList()
@@ -240,9 +259,13 @@ data class TextOverlayItem(
     val yFraction: Float = 0.5f,
     val fontSizeSp: Float = 24f,
     val colorHex: Long = 0xFFFFFFFF,
-    val bgColorHex: Long = 0x88000000,
+    val bgColorHex: Long = 0x9916161A,
     val strokeColorHex: Long = 0xFF000000,
+    val strokeEnabled: Boolean = true,
     val hasShadow: Boolean = true,
+    val useGradient: Boolean = false,
+    val curveDegrees: Float = 0f,
+    val isSticker: Boolean = false,
     val fontStyle: TextFontStyle = TextFontStyle.MODERN,
     val animation: TextAnimationType = TextAnimationType.NONE,
     val styleId: String = "classic",
@@ -269,7 +292,7 @@ data class AudioTrackItem(
     val id: String = UUID.randomUUID().toString(),
     val uriString: String,
     val title: String,
-    val volume: Float = 0.8f,
+    val volume: Float = 0.85f,
     val durationMs: Long = 30000L,
     val fadeIn: Boolean = false,
     val fadeOut: Boolean = false,
@@ -285,6 +308,8 @@ data class ColorAdjustments(
     val saturation: Float = 0f, // -1.0f .. 1.0f
     val exposure: Float = 0f,   // -0.5f .. 0.5f
     val sharpen: Float = 0f,    // 0f .. 1.0f
+    val highlights: Float = 0f, // -0.5f .. 0.5f
+    val shadows: Float = 0f,    // -0.5f .. 0.5f
     val vignette: Float = 0f,   // 0f .. 1.0f
     val hue: Float = 0f         // -45f .. 45f
 )
@@ -300,7 +325,10 @@ data class ProjectTimelineData(
     val adjustments: ColorAdjustments = ColorAdjustments(),
     val aspectRatio: AspectRatioPreset = AspectRatioPreset.RATIO_9_16,
     val canvasFitMode: CanvasFitMode = CanvasFitMode.AUTO_FIT,
-    val canvasBgHex: Long = 0xFF000000
+    val canvasBgHex: Long = 0xFF0B0B0D,
+    val canvasBgImageUri: String? = null,
+    val snapToGrid: Boolean = true,
+    val includeWatermark: Boolean = false
 ) {
     val totalDurationMs: Long
         get() = clips.sumOf { it.effectiveDurationMs }

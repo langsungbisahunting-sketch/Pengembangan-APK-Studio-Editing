@@ -1,4 +1,4 @@
-name: Build VeloCut Android APK
+name: Build Komik Narasi Studio APK
 
 on:
   push:
@@ -49,18 +49,18 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VeloCut-APK
+          name: KomikNarasi-APK
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish APK to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view velocut-latest >/dev/null 2>&1; then
-            gh release upload velocut-latest app/build/outputs/apk/debug/app-debug.apk --clobber
+          if gh release view komik-narasi-latest >/dev/null 2>&1; then
+            gh release upload komik-narasi-latest app/build/outputs/apk/debug/app-debug.apk --clobber
           else
-            gh release create velocut-latest app/build/outputs/apk/debug/app-debug.apk \
-              --title "VeloCut APK (Siap Instal di HP)" \
-              --notes "Unduh file app-debug.apk di bawah ini untuk menginstal VeloCut di HP Android." \
+            gh release create komik-narasi-latest app/build/outputs/apk/debug/app-debug.apk \
+              --title "Komik Narasi Studio APK (Siap Instal di HP)" \
+              --notes "Unduh file app-debug.apk di bawah ini untuk menginstal Komik Narasi Studio di HP Android." \
               --latest
           fi

@@ -67,10 +67,13 @@ import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
 import com.example.model.TransitionType
 import com.example.model.VideoClip
-import com.example.ui.theme.AmberAudio
-import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.CrimsonAlert
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.EnergyOrange
+import com.example.ui.theme.EnergyOrangeSoft
+import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.GoldSoft
+import com.example.ui.theme.PureWhite
 import com.example.ui.theme.StudioBorder
 import com.example.ui.theme.StudioCard
 import com.example.ui.theme.StudioSurface
@@ -78,7 +81,6 @@ import com.example.ui.theme.StudioSurfaceElevated
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import com.example.ui.theme.VioletOverlay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -183,7 +185,7 @@ fun TimelinePanel(
                                     .padding(horizontal = 2.dp)
                                     .size(22.dp)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(if (hasTransition) ElectricCyan else StudioCard)
+                                    .background(if (hasTransition) EnergyOrange else StudioCard)
                                     .border(1.dp, StudioBorder, RoundedCornerShape(6.dp))
                                     .clickable { onTapTransition(index) },
                                 contentAlignment = Alignment.Center
@@ -191,7 +193,7 @@ fun TimelinePanel(
                                 Icon(
                                     imageVector = Icons.Filled.AutoAwesomeMotion,
                                     contentDescription = "Transisi",
-                                    tint = if (hasTransition) Color(0xFF041318) else TextSecondary,
+                                    tint = if (hasTransition) PureWhite else TextSecondary,
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
@@ -204,7 +206,7 @@ fun TimelinePanel(
                         onClick = onAddMediaClick,
                         shape = RoundedCornerShape(10.dp),
                         color = StudioCard,
-                        border = BorderStroke(1.dp, ElectricCyan.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.dp, EnergyOrange.copy(alpha = 0.7f)),
                         modifier = Modifier
                             .size(48.dp)
                             .testTag("timeline_add_clip_button")
@@ -213,7 +215,7 @@ fun TimelinePanel(
                             Icon(
                                 imageVector = Icons.Filled.Add,
                                 contentDescription = "Tambah Klip",
-                                tint = ElectricCyan,
+                                tint = EnergyOrange,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -236,7 +238,7 @@ fun TimelinePanel(
                                 onClick = { onSelectPip(pip.id) },
                                 shape = RoundedCornerShape(7.dp),
                                 color = if (selected) EmeraldSuccess else EmeraldSuccess.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (selected) Color.White else EmeraldSuccess),
+                                border = BorderStroke(1.dp, if (selected) PureWhite else EmeraldSuccess),
                                 modifier = Modifier
                                     .offset(x = offsetDp)
                                     .width(itemWidthDp)
@@ -250,13 +252,13 @@ fun TimelinePanel(
                                     Icon(
                                         imageVector = Icons.Filled.Layers,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = PureWhite,
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Text(
                                         text = "PiP: ${pip.displayName}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
+                                        color = PureWhite,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -266,7 +268,7 @@ fun TimelinePanel(
                     }
                 }
 
-                // 4. Text & Caption Track (T1)
+                // 4. Text & Sticker Track (T1)
                 if (timeline.textOverlays.isNotEmpty()) {
                     Box(
                         modifier = Modifier
@@ -281,8 +283,8 @@ fun TimelinePanel(
                             Surface(
                                 onClick = { onSelectText(item.id) },
                                 shape = RoundedCornerShape(7.dp),
-                                color = if (selected) VioletOverlay else VioletOverlay.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, if (selected) Color.White else VioletOverlay),
+                                color = if (selected) EnergyOrange else EnergyOrangeSoft,
+                                border = BorderStroke(1.dp, if (selected) PureWhite else EnergyOrange),
                                 modifier = Modifier
                                     .offset(x = offsetDp)
                                     .width(itemWidthDp)
@@ -296,13 +298,13 @@ fun TimelinePanel(
                                     Icon(
                                         imageVector = Icons.Filled.TextFields,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = PureWhite,
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Text(
                                         text = item.text,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
+                                        color = PureWhite,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -312,14 +314,14 @@ fun TimelinePanel(
                     }
                 }
 
-                // 5. Audio Track (A1)
+                // 5. Audio / TTS Track (A1)
                 val totalTrackWidthDp = ((totalDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(160.dp)
                 if (timeline.audioTrack != null) {
                     Surface(
                         onClick = onAddAudioClick,
                         shape = RoundedCornerShape(8.dp),
-                        color = AmberAudio.copy(alpha = 0.18f),
-                        border = BorderStroke(1.dp, AmberAudio.copy(alpha = 0.7f)),
+                        color = GoldSoft,
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.75f)),
                         modifier = Modifier
                             .width(totalTrackWidthDp)
                             .height(30.dp)
@@ -334,7 +336,7 @@ fun TimelinePanel(
                                 while (x < size.width - 4.dp.toPx()) {
                                     val amp = (0.25f + 0.65f * abs(sin(i * 0.55f))) * size.height * 0.75f
                                     drawRoundRect(
-                                        color = AmberAudio.copy(alpha = 0.55f),
+                                        color = GoldAccent.copy(alpha = 0.55f),
                                         topLeft = Offset(x, (size.height - amp) / 2f),
                                         size = Size(barW, amp),
                                         cornerRadius = CornerRadius(2f, 2f)
@@ -353,7 +355,7 @@ fun TimelinePanel(
                                 Icon(
                                     imageVector = Icons.Filled.MusicNote,
                                     contentDescription = null,
-                                    tint = AmberAudio,
+                                    tint = GoldAccent,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
@@ -381,9 +383,9 @@ fun TimelinePanel(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(Icons.Filled.MusicNote, null, tint = AmberAudio, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Filled.MusicNote, null, tint = GoldAccent, modifier = Modifier.size(14.dp))
                             Text(
-                                text = "+ Tambah / Ekstrak Musik",
+                                text = "+ Tambah Musik / Narasi TTS",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = TextSecondary
                             )
@@ -395,7 +397,7 @@ fun TimelinePanel(
             Spacer(modifier = Modifier.width(halfViewport))
         }
 
-        // Fixed Center Playhead
+        // Fixed Center Playhead (Energy Orange + Pure White)
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -405,16 +407,17 @@ fun TimelinePanel(
         ) {
             Box(
                 modifier = Modifier
-                    .size(10.dp)
+                    .size(11.dp)
                     .clip(CircleShape)
-                    .background(ElectricCyan)
+                    .background(EnergyOrange)
+                    .border(1.5.dp, PureWhite, CircleShape)
             )
             Box(
                 modifier = Modifier
-                    .padding(top = 6.dp)
+                    .padding(top = 7.dp)
                     .width(2.dp)
                     .fillMaxHeight()
-                    .background(Color.White)
+                    .background(PureWhite)
             )
         }
     }
@@ -494,7 +497,7 @@ private fun VideoClipTrackItem(
             .background(StudioCard)
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) ElectricCyan else StudioBorder,
+                color = if (isSelected) EnergyOrange else StudioBorder,
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick)
@@ -517,10 +520,10 @@ private fun VideoClipTrackItem(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.18f))
+                .background(Color.Black.copy(alpha = 0.2f))
         )
 
-        // Speed / Curve / Mute badges
+        // Speed / Curve / Reverse / Crop / Mute badges
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -528,21 +531,43 @@ private fun VideoClipTrackItem(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (clip.speedCurve != SpeedCurvePreset.NORMAL) {
-                Surface(shape = RoundedCornerShape(4.dp), color = NeonCoral) {
+                Surface(shape = RoundedCornerShape(4.dp), color = EnergyOrange) {
                     Text(
                         text = clip.speedCurve.label,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
-                        color = Color.White,
+                        color = PureWhite,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
             } else if (clip.speed != 1.0f) {
-                Surface(shape = RoundedCornerShape(4.dp), color = NeonCoral) {
+                Surface(shape = RoundedCornerShape(4.dp), color = EnergyOrange) {
                     Text(
                         text = "${clip.speed}x",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                        color = Color.White,
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            if (clip.isReversed) {
+                Surface(shape = RoundedCornerShape(4.dp), color = CrimsonAlert) {
+                    Text(
+                        text = "REV",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            if (clip.cropScale > 1.03f) {
+                Surface(shape = RoundedCornerShape(4.dp), color = GoldAccent) {
+                    Text(
+                        text = "CROP",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        color = Color(0xFF1A1200),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
@@ -553,7 +578,7 @@ private fun VideoClipTrackItem(
                     Icon(
                         imageVector = Icons.Filled.VolumeOff,
                         contentDescription = "Bisukan",
-                        tint = Color.White,
+                        tint = PureWhite,
                         modifier = Modifier
                             .padding(2.dp)
                             .size(10.dp)
@@ -572,14 +597,14 @@ private fun VideoClipTrackItem(
                     .offset(x = kfX - 4.dp, y = (-4).dp)
                     .size(8.dp)
                     .rotate(45f)
-                    .background(ElectricCyan)
-                    .border(1.dp, Color.White)
+                    .background(GoldAccent)
+                    .border(1.dp, PureWhite)
             )
         }
 
         Surface(
             shape = RoundedCornerShape(4.dp),
-            color = Color.Black.copy(alpha = 0.68f),
+            color = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(horizontal = if (isSelected) 16.dp else 6.dp, vertical = 4.dp)
@@ -587,7 +612,7 @@ private fun VideoClipTrackItem(
             Text(
                 text = String.format(java.util.Locale.US, "%.1fs", clip.effectiveDurationMs / 1000f),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                color = Color.White,
+                color = PureWhite,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
             )
         }
@@ -598,7 +623,7 @@ private fun VideoClipTrackItem(
                     .align(Alignment.CenterStart)
                     .width(14.dp)
                     .fillMaxHeight()
-                    .background(ElectricCyan)
+                    .background(EnergyOrange)
                     .pointerInput(clip.id) {
                         detectHorizontalDragGestures { change, dragAmount ->
                             change.consume()
@@ -611,7 +636,7 @@ private fun VideoClipTrackItem(
                     modifier = Modifier
                         .width(2.dp)
                         .height(22.dp)
-                        .background(Color(0xFF041318), RoundedCornerShape(2.dp))
+                        .background(PureWhite, RoundedCornerShape(2.dp))
                 )
             }
 
@@ -620,7 +645,7 @@ private fun VideoClipTrackItem(
                     .align(Alignment.CenterEnd)
                     .width(14.dp)
                     .fillMaxHeight()
-                    .background(ElectricCyan)
+                    .background(EnergyOrange)
                     .pointerInput(clip.id) {
                         detectHorizontalDragGestures { change, dragAmount ->
                             change.consume()
@@ -633,7 +658,7 @@ private fun VideoClipTrackItem(
                     modifier = Modifier
                         .width(2.dp)
                         .height(22.dp)
-                        .background(Color(0xFF041318), RoundedCornerShape(2.dp))
+                        .background(PureWhite, RoundedCornerShape(2.dp))
                 )
             }
         }

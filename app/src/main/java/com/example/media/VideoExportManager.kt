@@ -61,7 +61,7 @@ class VideoExportManager(private val context: Context) {
         }
 
         val exportDir = File(context.filesDir, "exports").apply { mkdirs() }
-        val safeName = projectTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "VeloCut" }
+        val safeName = projectTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "KomikNarasi" }
         val outFile = File(exportDir, "${safeName}_${System.currentTimeMillis()}.mp4")
 
         val editedItems = timeline.clips.map { clip ->
@@ -177,7 +177,10 @@ class VideoExportManager(private val context: Context) {
         }
 
         val compositionEffects = buildList {
-            Media3EffectsFactory.buildTextOverlayEffect(timeline.textOverlays)?.let { add(it) }
+            Media3EffectsFactory.buildTextOverlayEffect(
+                overlays = timeline.textOverlays,
+                includeWatermark = timeline.includeWatermark
+            )?.let { add(it) }
         }
 
         val composition = Composition.Builder(sequences)
@@ -267,7 +270,7 @@ class VideoExportManager(private val context: Context) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(
                         MediaStore.Video.Media.RELATIVE_PATH,
-                        "${Environment.DIRECTORY_MOVIES}/VeloCut"
+                        "${Environment.DIRECTORY_MOVIES}/KomikNarasi"
                     )
                     put(MediaStore.Video.Media.IS_PENDING, 1)
                 }

@@ -94,8 +94,8 @@ class StudioHomeViewModel(application: Application) : AndroidViewModel(applicati
                             yFraction = 0.22f,
                             fontSizeSp = 28f,
                             colorHex = 0xFFFFFFFF,
-                            bgColorHex = 0x9900E5FF,
-                            styleId = "neon"
+                            bgColorHex = 0xFFFF6B00,
+                            styleId = "kn_orange"
                         )
                     )
                 } else emptyList()
@@ -106,7 +106,7 @@ class StudioHomeViewModel(application: Application) : AndroidViewModel(applicati
                     filterPreset = filter,
                     aspectRatio = ratio
                 )
-                val title = template?.title ?: "Proyek ${clips.firstOrNull()?.displayName?.substringBeforeLast('.') ?: "Baru"}"
+                val title = template?.title ?: "KN ${clips.firstOrNull()?.displayName?.substringBeforeLast('.') ?: "Proyek Baru"}"
                 val projectId = repository.createProject(title.take(32), timeline)
                 _pendingTemplate.value = null
                 onCreated(projectId)
@@ -154,7 +154,7 @@ class StudioHomeViewModel(application: Application) : AndroidViewModel(applicati
             val uri = VideoExportManager.saveToGalleryMediaStore(context, file, export.title)
             if (uri != null) {
                 repository.updateExportMediaStoreUri(export.id, uri.toString())
-                _uiMessage.value = HomeUiMessage("Disimpan ke Galeri (Movies/VeloCut)")
+                _uiMessage.value = HomeUiMessage("Disimpan ke Galeri (Movies/KomikNarasi)")
             } else {
                 _uiMessage.value = HomeUiMessage("Gagal menyimpan ke Galeri", isError = true)
             }
@@ -178,7 +178,7 @@ class StudioHomeViewModel(application: Application) : AndroidViewModel(applicati
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        val chooser = Intent.createChooser(shareIntent, "Bagikan Video VeloCut").apply {
+        val chooser = Intent.createChooser(shareIntent, "Bagikan Video Komik Narasi").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)

@@ -92,40 +92,52 @@ class ProjectRepository(private val dao: VeloCutDao) {
 
     fun getTemplates(): List<StudioTemplate> = listOf(
         StudioTemplate(
-            id = "tpl_cinematic",
-            title = "Neon Tokyo Cut",
-            subtitle = "Tone kontras sinematik untuk reel malam & urban",
+            id = "tpl_komik_pop",
+            title = "Panel Komik Drama",
+            subtitle = "Preset eksklusif Komik Narasi untuk panel cerita & dialog dinamis",
+            category = "Komik Pop",
+            coverDrawableRes = R.drawable.img_template_cinematic,
+            clipCountLabel = "1-6 Panel",
+            durationLabel = "0:20",
+            filterPreset = FilterPreset.KOMIK_POP,
+            aspectRatio = AspectRatioPreset.RATIO_9_16,
+            introText = "BABAK BARU"
+        ),
+        StudioTemplate(
+            id = "tpl_recap",
+            title = "Recap Alur Cerita",
+            subtitle = "Tone sinematik hangat untuk narasi alur komik & YouTube",
+            category = "Narasi",
+            coverDrawableRes = R.drawable.img_template_vlog,
+            clipCountLabel = "1-8 Klip",
+            durationLabel = "0:45",
+            filterPreset = FilterPreset.WARM_SUN,
+            aspectRatio = AspectRatioPreset.RATIO_16_9,
+            introText = "KISAH SANG TOKOH"
+        ),
+        StudioTemplate(
+            id = "tpl_noir",
+            title = "Misteri Komik Noir",
+            subtitle = "Kontras gelap-putih tajam untuk adegan ketegangan & twist",
             category = "Sinematik",
             coverDrawableRes = R.drawable.img_template_cinematic,
             clipCountLabel = "1-5 Klip",
             durationLabel = "0:15",
-            filterPreset = FilterPreset.CINEMATIC,
-            aspectRatio = AspectRatioPreset.RATIO_9_16,
-            introText = "NIGHT STORIES"
-        ),
-        StudioTemplate(
-            id = "tpl_vlog",
-            title = "Golden Hour Vlog",
-            subtitle = "Warna hangat matahari terbenam untuk travel & daily vlog",
-            category = "Vlog",
-            coverDrawableRes = R.drawable.img_template_vlog,
-            clipCountLabel = "1-6 Klip",
-            durationLabel = "0:30",
-            filterPreset = FilterPreset.WARM_SUN,
-            aspectRatio = AspectRatioPreset.RATIO_16_9,
-            introText = "WEEKEND ESCAPE"
+            filterPreset = FilterPreset.KOMIK_NOIR,
+            aspectRatio = AspectRatioPreset.RATIO_4_5,
+            introText = "RAHASIA MALAM"
         ),
         StudioTemplate(
             id = "tpl_beat",
-            title = "Cyber Beat Sync",
-            subtitle = "Grade warna futuristik berenergi tinggi untuk musik & transisi",
+            title = "Aksi Beat Komik",
+            subtitle = "Transisi cepat berenergi untuk adegan aksi & efek visual",
             category = "Beat Sync",
             coverDrawableRes = R.drawable.img_template_beat,
-            clipCountLabel = "1-8 Klip",
-            durationLabel = "0:12",
-            filterPreset = FilterPreset.CYBER,
+            clipCountLabel = "1-8 Panel",
+            durationLabel = "0:15",
+            filterPreset = FilterPreset.CINEMATIC,
             aspectRatio = AspectRatioPreset.RATIO_9_16,
-            introText = "FEEL THE BEAT"
+            introText = "AKSI PUNCAK"
         )
     )
 }
