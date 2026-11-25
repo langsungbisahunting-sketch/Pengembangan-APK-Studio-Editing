@@ -1302,7 +1302,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     val entity = ExportEntity(
                         title = state.projectTitle,
                         filePath = outFile.absolutePath,
-                        resolutionLabel = "${state.exportResolution.badge}·${state.exportFrameRate.fps}FPS",
+                        resolutionLabel = "${state.exportResolution.badge}·${state.timeline.aspectRatio.label}·${state.exportFrameRate.fps}FPS",
                         durationMs = state.timeline.totalDurationMs,
                         fileSizeBytes = fileSize
                     )

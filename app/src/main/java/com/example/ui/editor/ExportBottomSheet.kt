@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.local.ExportEntity
+import com.example.model.AspectRatioPreset
 import com.example.model.ExportBitrate
 import com.example.model.ExportFrameRate
 import com.example.model.ExportResolution
@@ -66,11 +69,13 @@ fun ExportBottomSheet(
     resolution: ExportResolution,
     frameRate: ExportFrameRate,
     bitrate: ExportBitrate,
+    aspectRatio: AspectRatioPreset,
     includeWatermark: Boolean,
     exportState: ExportState,
     onSelectResolution: (ExportResolution) -> Unit,
     onSelectFrameRate: (ExportFrameRate) -> Unit,
     onSelectBitrate: (ExportBitrate) -> Unit,
+    onSelectAspectRatio: (AspectRatioPreset) -> Unit,
     onToggleWatermark: (Boolean) -> Unit,
     onStartExport: () -> Unit,
     onCancelExport: () -> Unit,
@@ -87,6 +92,7 @@ fun ExportBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -98,6 +104,47 @@ fun ExportBottomSheet(
                         color = PureWhite,
                         fontWeight = FontWeight.Bold
                     )
+
+                    Text(
+                        text = "Rasio Video Simpan (Pilih format output)",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary
+                    )
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(AspectRatioPreset.entries) { ratio ->
+                            val selected = ratio == aspectRatio
+                            Surface(
+                                onClick = { onSelectAspectRatio(ratio) },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) EnergyOrangeSoft else StudioCard,
+                                border = BorderStroke(1.5.dp, if (selected) EnergyOrange else StudioBorder),
+                                modifier = Modifier
+                                    .width(94.dp)
+                                    .testTag("export_ratio_${ratio.name.lowercase()}")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = ratio.label,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (selected) EnergyOrange else PureWhite,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = ratio.subtitle,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     Text(
                         text = "Resolusi (Default 720p ringan untuk HP entry-level)",

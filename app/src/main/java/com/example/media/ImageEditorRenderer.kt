@@ -22,8 +22,10 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import com.example.model.BlendModePreset
+import com.example.model.ImageCropRatio
 import com.example.model.ImageCropRect
 import com.example.model.ImageEditorDocument
+import com.example.model.ImageExportFitMode
 import com.example.model.ImageFloodFillOp
 import com.example.model.ImageShapeLayer
 import com.example.model.PaintBrushType
@@ -260,7 +262,9 @@ object ImageEditorRenderer {
 
     suspend fun renderDocumentToFile(
         context: Context,
-        document: ImageEditorDocument
+        document: ImageEditorDocument,
+        exportRatio: ImageCropRatio? = null,
+        exportFitMode: ImageExportFitMode = ImageExportFitMode.FIT_CANVAS
     ): File? = withContext(Dispatchers.IO) {
         val raw = if (document.sourceUriString != null) {
             loadPreviewBitmap(context, Uri.parse(document.sourceUriString), maxDim = 1440)
@@ -479,10 +483,21 @@ object ImageEditorRenderer {
             canvas.restore()
         }
 
+        val bgFillColor = when {
+            document.customBgColorHex != 0x00000000L -> document.customBgColorHex.toInt()
+            document.isBlankCanvas -> document.canvasBaseColorHex.toInt()
+            else -> Color.parseColor("#0B0B0D")
+        }
+        val finalBitmap = if (exportRatio?.ratio != null && exportRatio.ratio > 0f) {
+            applyOutputAspectRatio(result, exportRatio.ratio, exportFitMode, bgFillColor)
+        } else {
+            result
+        }
+
         val dir = File(context.filesDir, "edited_images").apply { mkdirs() }
         val outFile = File(dir, "KN_IMG_${System.currentTimeMillis()}.png")
         FileOutputStream(outFile).use { fos ->
-            result.compress(Bitmap.CompressFormat.PNG, 95, fos)
+            finalBitmap.compress(Bitmap.CompressFormat.PNG, 95, fos)
         }
         outFile
     }
@@ -642,6 +657,42 @@ object ImageEditorRenderer {
         val left = ((w - targetW) / 2).coerceAtLeast(0)
         val top = ((h - targetH) / 2).coerceAtLeast(0)
         return Bitmap.createBitmap(croppedFree, left, top, targetW, targetH)
+    }
+
+    private fun applyOutputAspectRatio(
+        source: Bitmap,
+        targetRatio: Float,
+        fitMode: ImageExportFitMode,
+        bgColor: Int
+    ): Bitmap {
+        val w = source.width.coerceAtLeast(1)
+        val h = source.height.coerceAtLeast(1)
+        val currentRatio = w.toFloat() / h.toFloat()
+        if (abs(currentRatio - targetRatio) < 0.015f) return source
+
+        if (fitMode == ImageExportFitMode.CENTER_CROP) {
+            val (cropW, cropH) = if (currentRatio > targetRatio) {
+                (h * targetRatio).roundToInt().coerceIn(1, w) to h
+            } else {
+                w to (w / targetRatio).roundToInt().coerceIn(1, h)
+            }
+            val left = ((w - cropW) / 2).coerceAtLeast(0)
+            val top = ((h - cropH) / 2).coerceAtLeast(0)
+            return Bitmap.createBitmap(source, left, top, cropW, cropH)
+        }
+
+        val (outW, outH) = if (currentRatio > targetRatio) {
+            w to (w / targetRatio).roundToInt().coerceIn(1, 2048)
+        } else {
+            (h * targetRatio).roundToInt().coerceIn(1, 2048) to h
+        }
+        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        c.drawColor(bgColor)
+        val left = (outW - w) / 2f
+        val top = (outH - h) / 2f
+        c.drawBitmap(source, left, top, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        return out
     }
 
     private fun buildAndroidColorMatrix(doc: ImageEditorDocument): ColorMatrix {

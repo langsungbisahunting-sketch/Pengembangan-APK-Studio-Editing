@@ -117,6 +117,7 @@ import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
 import com.example.model.ImageCropRatio
 import com.example.model.ImageEditorTool
+import com.example.model.ImageExportFitMode
 import com.example.model.ImageShapeLayer
 import com.example.model.NormalizedPoint
 import com.example.model.PaintBrushType
@@ -157,6 +158,8 @@ private val PAINT_PALETTE = listOf(
     0xFFEC4899L, 0xFF06B6D4L, 0xFF78350FL, 0xFF6B7280L
 )
 
+private enum class ImageExportAction { SAVE_GALLERY, SEND_TIMELINE }
+
 @Composable
 fun ImageEditorTabContent(
     viewModel: ImageEditorViewModel,
@@ -165,6 +168,9 @@ fun ImageEditorTabContent(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showNewCanvasDialog by remember { mutableStateOf(false) }
+    var exportDialogAction by remember { mutableStateOf<ImageExportAction?>(null) }
+    var selectedSaveRatio by remember { mutableStateOf(ImageCropRatio.FREE) }
+    var selectedSaveFitMode by remember { mutableStateOf(ImageExportFitMode.FIT_CANVAS) }
 
     val basePhotoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -283,7 +289,10 @@ fun ImageEditorTabContent(
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Surface(
-                    onClick = { viewModel.saveEditedImageToGallery(onNotify) },
+                    onClick = {
+                        selectedSaveRatio = state.document.cropRatio
+                        exportDialogAction = ImageExportAction.SAVE_GALLERY
+                    },
                     shape = RoundedCornerShape(9.dp),
                     color = StudioCard,
                     border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.7f)),
@@ -307,10 +316,8 @@ fun ImageEditorTabContent(
                         .clip(RoundedCornerShape(9.dp))
                         .background(KomikNarasiHeroGradient)
                         .clickable {
-                            viewModel.sendToVideoTimeline(
-                                onProjectCreated = onOpenProject,
-                                onError = onNotify
-                            )
+                            selectedSaveRatio = state.document.cropRatio
+                            exportDialogAction = ImageExportAction.SEND_TIMELINE
                         }
                         .padding(horizontal = 10.dp)
                         .testTag("img_send_to_timeline_button"),
@@ -908,6 +915,114 @@ fun ImageEditorTabContent(
             confirmButton = {
                 TextButton(onClick = { showNewCanvasDialog = false }) {
                     Text("Tutup", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    exportDialogAction?.let { action ->
+        AlertDialog(
+            onDismissRequest = { exportDialogAction = null },
+            containerColor = StudioCard,
+            title = {
+                Text(
+                    text = if (action == ImageExportAction.SAVE_GALLERY) {
+                        "Pilih Rasio Simpan Gambar"
+                    } else {
+                        "Pilih Rasio ke Timeline Video"
+                    },
+                    color = PureWhite,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Tentukan rasio hasil akhir setelah mengedit:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(ImageCropRatio.entries) { ratio ->
+                            val selected = selectedSaveRatio == ratio
+                            val displayName = when (ratio) {
+                                ImageCropRatio.FREE -> "Sesuai Kanvas"
+                                ImageCropRatio.COMIC -> "3:4 Komik"
+                                ImageCropRatio.PORTRAIT -> "9:16 Reels"
+                                ImageCropRatio.LANDSCAPE -> "16:9 YouTube"
+                                ImageCropRatio.SQUARE -> "1:1 Persegi"
+                                ImageCropRatio.FEED -> "4:5 Feed"
+                            }
+                            FilterChip(
+                                selected = selected,
+                                onClick = { selectedSaveRatio = ratio },
+                                label = { Text(displayName) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = EnergyOrangeSoft,
+                                    selectedLabelColor = EnergyOrange
+                                ),
+                                modifier = Modifier.testTag("img_export_ratio_${ratio.name.lowercase()}")
+                            )
+                        }
+                    }
+
+                    if (selectedSaveRatio != ImageCropRatio.FREE) {
+                        Text(
+                            text = "Penyesuaian Ukuran:",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = PureWhite
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ImageExportFitMode.entries.forEach { mode ->
+                                val active = selectedSaveFitMode == mode
+                                Surface(
+                                    onClick = { selectedSaveFitMode = mode },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (active) EnergyOrangeSoft else StudioSurface,
+                                    border = BorderStroke(1.2.dp, if (active) EnergyOrange else StudioBorder),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = mode.label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (active) EnergyOrange else TextPrimary,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val chosenRatio = selectedSaveRatio
+                        val chosenFit = selectedSaveFitMode
+                        exportDialogAction = null
+                        if (action == ImageExportAction.SAVE_GALLERY) {
+                            viewModel.saveEditedImageToGallery(chosenRatio, chosenFit, onNotify)
+                        } else {
+                            viewModel.sendToVideoTimeline(
+                                exportRatio = chosenRatio,
+                                fitMode = chosenFit,
+                                onProjectCreated = onOpenProject,
+                                onError = onNotify
+                            )
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EnergyOrange, contentColor = PureWhite),
+                    modifier = Modifier.testTag("img_export_confirm_button")
+                ) {
+                    Text(if (action == ImageExportAction.SAVE_GALLERY) "Simpan Sekarang" else "Kirim ke Timeline")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { exportDialogAction = null }) {
+                    Text("Batal", color = TextSecondary)
                 }
             }
         )

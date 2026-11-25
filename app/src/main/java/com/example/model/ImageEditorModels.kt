@@ -11,6 +11,11 @@ enum class ImageCropRatio(val label: String, val ratio: Float?) {
     LANDSCAPE("16:9", 16f / 9f)
 }
 
+enum class ImageExportFitMode(val label: String) {
+    FIT_CANVAS("Utuh + Latar"),
+    CENTER_CROP("Potong Tengah")
+}
+
 enum class ImageEditorTool(val label: String) {
     PAINT("Kuas & Cat"),
     SHAPES("Bentuk"),

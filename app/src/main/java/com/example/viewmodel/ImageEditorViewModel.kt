@@ -18,6 +18,7 @@ import com.example.model.ImageCropRatio
 import com.example.model.ImageCropRect
 import com.example.model.ImageEditorDocument
 import com.example.model.ImageEditorTool
+import com.example.model.ImageExportFitMode
 import com.example.model.ImageFloodFillOp
 import com.example.model.ImageOverlayLayer
 import com.example.model.ImageShapeLayer
@@ -572,11 +573,20 @@ class ImageEditorViewModel(application: Application) : AndroidViewModel(applicat
         mutateDoc(rebuildBase = true) { it.copy(customBgColorHex = hex, removeBackground = true) }
     }
 
-    fun saveEditedImageToGallery(onResult: (String) -> Unit) {
+    fun saveEditedImageToGallery(
+        exportRatio: ImageCropRatio = ImageCropRatio.FREE,
+        fitMode: ImageExportFitMode = ImageExportFitMode.FIT_CANVAS,
+        onResult: (String) -> Unit
+    ) {
         val doc = _uiState.value.document
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true) }
-            val file = ImageEditorRenderer.renderDocumentToFile(getApplication(), doc)
+            val file = ImageEditorRenderer.renderDocumentToFile(
+                context = getApplication(),
+                document = doc,
+                exportRatio = exportRatio,
+                exportFitMode = fitMode
+            )
             if (file == null) {
                 _uiState.update { it.copy(isBusy = false) }
                 onResult("Gagal memproses gambar")
@@ -589,17 +599,27 @@ class ImageEditorViewModel(application: Application) : AndroidViewModel(applicat
             )
             _uiState.update { it.copy(isBusy = false) }
             onResult(
-                if (uri != null) "Gambar tersimpan ke Galeri (Pictures/KomikNarasi)"
+                if (uri != null) "Gambar (${exportRatio.label}) tersimpan ke Galeri (Pictures/KomikNarasi)"
                 else "Gagal menyimpan ke Galeri"
             )
         }
     }
 
-    fun sendToVideoTimeline(onProjectCreated: (Long) -> Unit, onError: (String) -> Unit) {
+    fun sendToVideoTimeline(
+        exportRatio: ImageCropRatio = ImageCropRatio.FREE,
+        fitMode: ImageExportFitMode = ImageExportFitMode.FIT_CANVAS,
+        onProjectCreated: (Long) -> Unit,
+        onError: (String) -> Unit
+    ) {
         val doc = _uiState.value.document
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true) }
-            val file = ImageEditorRenderer.renderDocumentToFile(getApplication(), doc)
+            val file = ImageEditorRenderer.renderDocumentToFile(
+                context = getApplication(),
+                document = doc,
+                exportRatio = exportRatio,
+                exportFitMode = fitMode
+            )
             if (file == null) {
                 _uiState.update { it.copy(isBusy = false) }
                 onError("Gagal merender gambar untuk timeline")
@@ -613,7 +633,8 @@ class ImageEditorViewModel(application: Application) : AndroidViewModel(applicat
                 trimStartMs = 0L,
                 trimEndMs = 5000L
             )
-            val ratio = when (doc.cropRatio) {
+            val effectiveRatio = if (exportRatio != ImageCropRatio.FREE) exportRatio else doc.cropRatio
+            val ratio = when (effectiveRatio) {
                 ImageCropRatio.SQUARE -> AspectRatioPreset.RATIO_1_1
                 ImageCropRatio.COMIC -> AspectRatioPreset.RATIO_3_4
                 ImageCropRatio.FEED -> AspectRatioPreset.RATIO_4_5

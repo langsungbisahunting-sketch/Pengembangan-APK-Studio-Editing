@@ -12,6 +12,7 @@ import com.example.model.ImageBrushStroke
 import com.example.model.ImageCropRatio
 import com.example.model.ImageCropRect
 import com.example.model.ImageEditorDocument
+import com.example.model.ImageExportFitMode
 import com.example.model.ImageFloodFillOp
 import com.example.model.ImageOverlayLayer
 import com.example.model.ImageShapeLayer
@@ -283,5 +284,15 @@ class ProjectTimelineTest {
         assertEquals(PaintShapeType.STAR, doc.shapes.first().shapeType)
         assertEquals(BlendModePreset.MULTIPLY, doc.overlayImages.first().blendMode)
         assertTrue(doc.overlayImages.first().flipHorizontal)
+    }
+
+    @Test
+    fun `export aspect ratios cover image and video output formats`() {
+        assertEquals(2, ImageExportFitMode.entries.size)
+        assertEquals("3:4", ImageCropRatio.COMIC.label)
+        assertEquals(0.75f, ImageCropRatio.COMIC.ratio!!, 0.001f)
+        assertEquals("9:16", AspectRatioPreset.RATIO_9_16.label)
+        assertEquals("16:9", AspectRatioPreset.RATIO_16_9.label)
+        assertEquals("1:1", AspectRatioPreset.RATIO_1_1.label)
     }
 }

@@ -27,6 +27,7 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
+import com.example.model.AspectRatioPreset
 import com.example.model.AudioTrackItem
 import com.example.model.ExportBitrate
 import com.example.model.ExportFrameRate
@@ -38,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
+import kotlin.math.roundToInt
 
 @UnstableApi
 class VideoExportManager(private val context: Context) {
@@ -78,6 +80,27 @@ class VideoExportManager(private val context: Context) {
                 )
             }
 
+            val exportPresentation = when (timeline.aspectRatio) {
+                AspectRatioPreset.ORIGINAL -> Presentation.createForHeight(resolution.heightPx)
+                else -> {
+                    val ratio = (timeline.aspectRatio.widthRatio / timeline.aspectRatio.heightRatio).coerceIn(0.25f, 4f)
+                    val (targetW, targetH) = if (ratio >= 1f) {
+                        val h = (resolution.heightPx / 2) * 2
+                        val w = ((h * ratio).roundToInt() / 2) * 2
+                        w.coerceAtLeast(360) to h.coerceAtLeast(360)
+                    } else {
+                        val w = (resolution.heightPx / 2) * 2
+                        val h = ((w / ratio).roundToInt() / 2) * 2
+                        w.coerceAtLeast(360) to h.coerceAtLeast(360)
+                    }
+                    Presentation.createForWidthAndHeight(
+                        targetW,
+                        targetH,
+                        Presentation.LAYOUT_SCALE_TO_FIT
+                    )
+                }
+            }
+
             val videoEffects = mutableListOf<Effect>().apply {
                 addAll(
                     Media3EffectsFactory.buildClipVideoEffects(
@@ -87,7 +110,7 @@ class VideoExportManager(private val context: Context) {
                         adjustments = timeline.adjustments
                     )
                 )
-                add(Presentation.createForHeight(resolution.heightPx))
+                add(exportPresentation)
             }
 
             val audioProcessors = mutableListOf<AudioProcessor>()

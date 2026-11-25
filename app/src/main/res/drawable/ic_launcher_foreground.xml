@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_launcher_art"
+        android:drawable="@drawable/komik_narasi_icon_1795601455204"
         android:gravity="center" />
 </layer-list>
