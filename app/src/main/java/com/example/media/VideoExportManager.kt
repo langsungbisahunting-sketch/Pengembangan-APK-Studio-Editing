@@ -27,6 +27,7 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
+import com.example.model.AudioTrackItem
 import com.example.model.ExportBitrate
 import com.example.model.ExportFrameRate
 import com.example.model.ExportResolution
@@ -137,43 +138,28 @@ class VideoExportManager(private val context: Context) {
         val videoSequence = EditedMediaItemSequence.withAudioAndVideoFrom(editedItems)
         val sequences = mutableListOf(videoSequence)
 
-        timeline.audioTrack?.let { bgAudio ->
-            val bgProcessors = mutableListOf<AudioProcessor>()
-            if (bgAudio.voiceEffect.pitchMultiplier != 1.0f) {
-                bgProcessors.add(
-                    SonicAudioProcessor().apply {
-                        setPitch(bgAudio.voiceEffect.pitchMultiplier)
-                    }
+        // Independent Track 1: Vocal / Narration Track
+        timeline.vocalTrack?.let { vocal ->
+            sequences.add(
+                buildAudioSequence(
+                    track = vocal,
+                    effectiveVolume = vocal.volume.coerceIn(0.05f, 1f),
+                    loop = false
                 )
-            }
-            if (bgAudio.voiceEffect != VoiceEffectPreset.NONE ||
-                bgAudio.vocalMode != VocalSeparationMode.ORIGINAL ||
-                bgAudio.noiseReduction
-            ) {
-                bgProcessors.add(
-                    VoiceEffectsAudioProcessor(
-                        voiceEffect = bgAudio.voiceEffect,
-                        vocalMode = bgAudio.vocalMode,
-                        noiseReduction = bgAudio.noiseReduction
-                    )
-                )
-            }
-            bgProcessors.add(
-                ChannelMixingAudioProcessor().apply {
-                    putChannelMixingMatrix(
-                        ChannelMixingMatrix.createForConstantGain(2, 2)
-                            .scaleBy(bgAudio.volume.coerceIn(0.05f, 1f))
-                    )
-                }
             )
-            val audioItem = EditedMediaItem.Builder(MediaItem.fromUri(Uri.parse(bgAudio.uriString)))
-                .setEffects(Effects(bgProcessors, emptyList()))
-                .build()
-            val audioSequence = EditedMediaItemSequence.withAudioFrom(listOf(audioItem))
-                .buildUpon()
-                .setIsLooping(true)
-                .build()
-            sequences.add(audioSequence)
+        }
+
+        // Independent Track 2: Background Music / Instrumental Track (supports auto-ducking)
+        val effectiveMusicTrack = timeline.musicTrack ?: timeline.audioTrack
+        effectiveMusicTrack?.let { music ->
+            val duckFactor = if (music.autoDucking && timeline.vocalTrack != null) 0.45f else 1.0f
+            sequences.add(
+                buildAudioSequence(
+                    track = music,
+                    effectiveVolume = (music.volume * duckFactor).coerceIn(0.03f, 1f),
+                    loop = true
+                )
+            )
         }
 
         val compositionEffects = buildList {
@@ -222,6 +208,63 @@ class VideoExportManager(private val context: Context) {
         activeTransformer = transformer
         transformer.start(composition, outFile.absolutePath)
         startProgressPolling(transformer, onProgress)
+    }
+
+    private fun buildAudioSequence(
+        track: AudioTrackItem,
+        effectiveVolume: Float,
+        loop: Boolean
+    ): EditedMediaItemSequence {
+        val processors = mutableListOf<AudioProcessor>()
+        if (track.voiceEffect.pitchMultiplier != 1.0f) {
+            processors.add(
+                SonicAudioProcessor().apply {
+                    setPitch(track.voiceEffect.pitchMultiplier)
+                }
+            )
+        }
+        if (track.voiceEffect != VoiceEffectPreset.NONE ||
+            track.vocalMode != VocalSeparationMode.ORIGINAL ||
+            track.noiseReduction
+        ) {
+            processors.add(
+                VoiceEffectsAudioProcessor(
+                    voiceEffect = track.voiceEffect,
+                    vocalMode = track.vocalMode,
+                    noiseReduction = track.noiseReduction
+                )
+            )
+        }
+        processors.add(
+            ChannelMixingAudioProcessor().apply {
+                putChannelMixingMatrix(
+                    ChannelMixingMatrix.createForConstantGain(2, 2).scaleBy(effectiveVolume)
+                )
+            }
+        )
+
+        val clipEnd = track.trimEndMs.coerceIn(
+            (track.trimStartMs + 400L).coerceAtMost(track.durationMs),
+            track.durationMs.coerceAtLeast(400L)
+        )
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.parse(track.uriString))
+            .setClippingConfiguration(
+                MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(track.trimStartMs.coerceAtLeast(0L))
+                    .setEndPositionMs(clipEnd)
+                    .build()
+            )
+            .build()
+
+        val audioItem = EditedMediaItem.Builder(mediaItem)
+            .setEffects(Effects(processors, emptyList()))
+            .build()
+
+        return EditedMediaItemSequence.withAudioFrom(listOf(audioItem))
+            .buildUpon()
+            .setIsLooping(loop)
+            .build()
     }
 
     fun cancelExport() {

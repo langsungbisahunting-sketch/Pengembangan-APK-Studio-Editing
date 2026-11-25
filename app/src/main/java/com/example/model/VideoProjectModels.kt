@@ -68,6 +68,15 @@ enum class TransitionType(val label: String) {
 }
 
 @Serializable
+enum class PanZoomPreset(val label: String) {
+    NONE("Normal"),
+    ZOOM_IN("Zoom Masuk"),
+    ZOOM_OUT("Zoom Keluar"),
+    PAN_LEFT("Geser Kiri"),
+    PAN_RIGHT("Geser Kanan")
+}
+
+@Serializable
 enum class SpeedCurvePreset(val label: String, val points: List<Float>) {
     NORMAL("Normal", listOf(1f, 1f, 1f, 1f, 1f)),
     MONTAGE("Montage", listOf(0.6f, 1.4f, 2.2f, 1.2f, 0.7f)),
@@ -102,6 +111,12 @@ enum class VocalSeparationMode(val label: String) {
     INSTRUMENTAL_ONLY("Musik / BGM")
 }
 
+@Serializable
+enum class AudioTrackRole(val label: String) {
+    VOCAL("Track Suara / Vokal"),
+    MUSIC("Track Musik / BGM")
+}
+
 enum class TtsVoiceStyle(val label: String, val pitch: Float, val rate: Float) {
     NARATOR_BERAT("Narator Berat", 0.78f, 0.94f),
     EKSPRESIF("Komik Ekspresif", 1.08f, 1.04f),
@@ -132,7 +147,8 @@ enum class BlendModePreset(val label: String) {
     SCREEN("Screen"),
     MULTIPLY("Multiply"),
     OVERLAY("Overlay"),
-    LIGHTEN("Lighten")
+    LIGHTEN("Lighten"),
+    DARKEN("Darken")
 }
 
 enum class ExportResolution(val label: String, val heightPx: Int, val badge: String) {
@@ -228,6 +244,11 @@ data class VideoClip(
     val vocalMode: VocalSeparationMode = VocalSeparationMode.ORIGINAL,
     val noiseReduction: Boolean = false,
     val cropScale: Float = 1.0f,
+    val userScale: Float = 1.0f,
+    val posX: Float = 0f,
+    val posY: Float = 0f,
+    val freeRotationDeg: Float = 0f,
+    val panZoom: PanZoomPreset = PanZoomPreset.NONE,
     val rotationDegrees: Int = 0,
     val isMirrored: Boolean = false,
     val isReversed: Boolean = false,
@@ -253,13 +274,16 @@ data class VideoClip(
 data class TextOverlayItem(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
+    val originalText: String? = null,
     val startMs: Long = 0L,
     val endMs: Long = 3000L,
     val xFraction: Float = 0.5f,
     val yFraction: Float = 0.5f,
+    val scale: Float = 1.0f,
+    val rotationDeg: Float = 0f,
     val fontSizeSp: Float = 24f,
     val colorHex: Long = 0xFFFFFFFF,
-    val bgColorHex: Long = 0x9916161A,
+    val bgColorHex: Long = 0xCC16161A,
     val strokeColorHex: Long = 0xFF000000,
     val strokeEnabled: Boolean = true,
     val hasShadow: Boolean = true,
@@ -283,8 +307,12 @@ data class PipOverlayItem(
     val xFraction: Float = 0.72f,
     val yFraction: Float = 0.28f,
     val scale: Float = 0.34f,
+    val rotationDeg: Float = 0f,
     val opacity: Float = 1f,
-    val blendMode: BlendModePreset = BlendModePreset.NORMAL
+    val blendMode: BlendModePreset = BlendModePreset.NORMAL,
+    val chromaEnabled: Boolean = false,
+    val chromaKeyHex: Long = 0xFF00D84A,
+    val chromaTolerance: Float = 0.25f
 )
 
 @Serializable
@@ -292,14 +320,22 @@ data class AudioTrackItem(
     val id: String = UUID.randomUUID().toString(),
     val uriString: String,
     val title: String,
+    val role: AudioTrackRole = AudioTrackRole.MUSIC,
     val volume: Float = 0.85f,
     val durationMs: Long = 30000L,
+    val startOffsetMs: Long = 0L,
+    val trimStartMs: Long = 0L,
+    val trimEndMs: Long = 30000L,
     val fadeIn: Boolean = false,
     val fadeOut: Boolean = false,
+    val autoDucking: Boolean = false,
     val voiceEffect: VoiceEffectPreset = VoiceEffectPreset.NONE,
     val vocalMode: VocalSeparationMode = VocalSeparationMode.ORIGINAL,
     val noiseReduction: Boolean = false
-)
+) {
+    val effectiveDurationMs: Long
+        get() = (trimEndMs.coerceAtMost(durationMs) - trimStartMs).coerceAtLeast(400L)
+}
 
 @Serializable
 data class ColorAdjustments(
@@ -319,6 +355,8 @@ data class ProjectTimelineData(
     val clips: List<VideoClip> = emptyList(),
     val textOverlays: List<TextOverlayItem> = emptyList(),
     val pipOverlays: List<PipOverlayItem> = emptyList(),
+    val vocalTrack: AudioTrackItem? = null,
+    val musicTrack: AudioTrackItem? = null,
     val audioTrack: AudioTrackItem? = null,
     val filterPreset: FilterPreset = FilterPreset.NONE,
     val videoEffect: VideoEffectPreset = VideoEffectPreset.NONE,

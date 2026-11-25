@@ -25,7 +25,12 @@ class ProjectRepository(private val dao: VeloCutDao) {
 
     fun decodeTimeline(timelineJson: String): ProjectTimelineData {
         return runCatching {
-            json.decodeFromString<ProjectTimelineData>(timelineJson)
+            val decoded = json.decodeFromString<ProjectTimelineData>(timelineJson)
+            if (decoded.musicTrack == null && decoded.audioTrack != null) {
+                decoded.copy(musicTrack = decoded.audioTrack, audioTrack = null)
+            } else {
+                decoded
+            }
         }.getOrDefault(ProjectTimelineData())
     }
 

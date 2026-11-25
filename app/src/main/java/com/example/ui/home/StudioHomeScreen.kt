@@ -40,9 +40,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.FileCopy
@@ -56,7 +56,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AlertDialog
@@ -135,14 +135,15 @@ import com.example.ui.theme.StudioSurfaceElevated
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+import com.example.viewmodel.ImageEditorViewModel
 import com.example.viewmodel.StudioHomeViewModel
 import java.io.File
 
 private enum class HomeTab(val label: String) {
     EDIT("Studio"),
+    IMAGE_EDITOR("Edit Gambar"),
     TEMPLATE("Template KN"),
-    EXPORTS("Ekspor"),
-    DOWNLOAD("Unduh App")
+    EXPORTS("Ekspor")
 }
 
 private data class QuickToolShortcut(
@@ -155,6 +156,7 @@ private data class QuickToolShortcut(
 @Composable
 fun StudioHomeScreen(
     viewModel: StudioHomeViewModel,
+    imageEditorViewModel: ImageEditorViewModel,
     onOpenProject: (Long) -> Unit
 ) {
     val projects by viewModel.projects.collectAsStateWithLifecycle()
@@ -232,9 +234,9 @@ fun StudioHomeScreen(
                                     Icon(
                                         imageVector = when (tab) {
                                             HomeTab.EDIT -> if (selected) Icons.Filled.Movie else Icons.Outlined.Movie
+                                            HomeTab.IMAGE_EDITOR -> if (selected) Icons.Filled.Brush else Icons.Outlined.Brush
                                             HomeTab.TEMPLATE -> Icons.Filled.AutoAwesome
                                             HomeTab.EXPORTS -> if (selected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
-                                            HomeTab.DOWNLOAD -> if (selected) Icons.Filled.Download else Icons.Outlined.Download
                                         },
                                         contentDescription = tab.label
                                     )
@@ -281,9 +283,9 @@ fun StudioHomeScreen(
                                     Icon(
                                         imageVector = when (tab) {
                                             HomeTab.EDIT -> if (selected) Icons.Filled.Movie else Icons.Outlined.Movie
+                                            HomeTab.IMAGE_EDITOR -> if (selected) Icons.Filled.Brush else Icons.Outlined.Brush
                                             HomeTab.TEMPLATE -> Icons.Filled.AutoAwesome
                                             HomeTab.EXPORTS -> if (selected) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary
-                                            HomeTab.DOWNLOAD -> if (selected) Icons.Filled.Download else Icons.Outlined.Download
                                         },
                                         contentDescription = tab.label
                                     )
@@ -337,6 +339,12 @@ fun StudioHomeScreen(
                                 onDelete = { viewModel.deleteProject(it.id) }
                             )
 
+                            HomeTab.IMAGE_EDITOR -> ImageEditorTabContent(
+                                viewModel = imageEditorViewModel,
+                                onOpenProject = onOpenProject,
+                                onNotify = { msg -> viewModel.showMessage(msg) }
+                            )
+
                             HomeTab.TEMPLATE -> TemplatesTabContent(
                                 templates = viewModel.templates,
                                 selectedCategory = selectedCategory,
@@ -353,10 +361,6 @@ fun StudioHomeScreen(
                                 onSaveGallery = viewModel::saveExportToGallery,
                                 onShare = viewModel::shareExport,
                                 onDelete = viewModel::deleteExport
-                            )
-
-                            HomeTab.DOWNLOAD -> AppDownloadTabContent(
-                                onNotify = { msg -> viewModel.showMessage(msg) }
                             )
                         }
                     }
@@ -456,9 +460,9 @@ private fun StudioTopHeader(
                 Text(
                     text = when (currentTab) {
                         HomeTab.EDIT -> "KN Cloud · $projectCount draf lokal"
+                        HomeTab.IMAGE_EDITOR -> "Edit Gambar, Teks, Kuas & Hapus Latar"
                         HomeTab.TEMPLATE -> "Template Eksklusif Komik Narasi"
                         HomeTab.EXPORTS -> "Komik Narasi Pro Engine · $exportCount hasil"
-                        HomeTab.DOWNLOAD -> "Unduh APK & panduan instalasi"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary

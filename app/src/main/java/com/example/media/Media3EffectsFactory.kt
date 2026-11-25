@@ -20,6 +20,7 @@ import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
+import com.example.model.PanZoomPreset
 import com.example.model.TextOverlayItem
 import com.example.model.VideoClip
 import com.example.model.VideoEffectPreset
@@ -38,18 +39,61 @@ object Media3EffectsFactory {
     ): List<Effect> {
         val effects = mutableListOf<Effect>()
 
-        // Crop zoom, Rotation & Mirror
-        if (clip.rotationDegrees != 0 || clip.isMirrored || abs(clip.cropScale - 1f) > 0.02f) {
+        // Crop zoom, User Pinch Scale, Rotation, Free Rotation & Mirror
+        val totalStaticScale = (clip.cropScale * clip.userScale).coerceIn(0.4f, 4.0f)
+        val totalRot = clip.rotationDegrees.toFloat() + clip.freeRotationDeg
+        if (abs(totalRot) > 0.2f || clip.isMirrored || abs(totalStaticScale - 1f) > 0.02f) {
             val builder = ScaleAndRotateTransformation.Builder()
-            if (clip.rotationDegrees != 0) {
-                builder.setRotationDegrees(clip.rotationDegrees.toFloat())
+            if (abs(totalRot) > 0.2f) {
+                builder.setRotationDegrees(totalRot)
             }
-            val crop = clip.cropScale.coerceIn(1f, 2.5f)
-            val scaleX = crop * (if (clip.isMirrored) -1f else 1f)
-            if (scaleX != 1f || crop != 1f) {
-                builder.setScale(scaleX, crop)
+            val scaleX = totalStaticScale * (if (clip.isMirrored) -1f else 1f)
+            if (abs(scaleX - 1f) > 0.01f || abs(totalStaticScale - 1f) > 0.01f) {
+                builder.setScale(scaleX, totalStaticScale)
             }
             effects.add(builder.build())
+        }
+
+        // User direct Canvas Drag translation
+        if (abs(clip.posX) > 0.005f || abs(clip.posY) > 0.005f) {
+            effects.add(
+                MatrixTransformation {
+                    Matrix().apply {
+                        postTranslate(clip.posX * 2f, -clip.posY * 2f)
+                    }
+                }
+            )
+        }
+
+        // Pan & Zoom (Ken Burns) motion effect
+        if (clip.panZoom != PanZoomPreset.NONE) {
+            val durMs = clip.effectiveDurationMs.coerceAtLeast(500L)
+            effects.add(
+                MatrixTransformation { presentationTimeUs ->
+                    val t = ((presentationTimeUs / 1000L).toFloat() / durMs.toFloat()).coerceIn(0f, 1f)
+                    Matrix().apply {
+                        when (clip.panZoom) {
+                            PanZoomPreset.ZOOM_IN -> {
+                                val s = 1.0f + 0.24f * t
+                                postScale(s, s)
+                            }
+                            PanZoomPreset.ZOOM_OUT -> {
+                                val s = 1.24f - 0.24f * t
+                                postScale(s, s)
+                            }
+                            PanZoomPreset.PAN_LEFT -> {
+                                postScale(1.18f, 1.18f)
+                                postTranslate(0.14f - 0.28f * t, 0f)
+                            }
+                            PanZoomPreset.PAN_RIGHT -> {
+                                postScale(1.18f, 1.18f)
+                                postTranslate(-0.14f + 0.28f * t, 0f)
+                            }
+                            PanZoomPreset.NONE -> {}
+                        }
+                    }
+                }
+            )
         }
 
         // Keyframe animation matrix transformation for export & preview
@@ -147,6 +191,8 @@ object Media3EffectsFactory {
             val settings = StaticOverlaySettings.Builder()
                 .setOverlayFrameAnchor(0f, 0f)
                 .setBackgroundFrameAnchor(ndcX, ndcY)
+                .setScale(item.scale.coerceIn(0.4f, 3.0f), item.scale.coerceIn(0.4f, 3.0f))
+                .setRotationDegrees(item.rotationDeg + item.curveDegrees)
                 .build()
             TextOverlay.createStaticTextOverlay(span, settings) as TextureOverlay
         }.toMutableList()

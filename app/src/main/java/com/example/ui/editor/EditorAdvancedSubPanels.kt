@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -41,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -61,6 +63,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.model.AudioTrackRole
 import com.example.model.BlendModePreset
 import com.example.model.ChromaKeyConfig
 import com.example.model.PipOverlayItem
@@ -71,6 +75,7 @@ import com.example.model.TtsVoiceStyle
 import com.example.model.VideoEffectPreset
 import com.example.model.VocalSeparationMode
 import com.example.model.VoiceEffectPreset
+import com.example.ui.common.formatTimecodeMs
 import com.example.ui.theme.CrimsonAlert
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.EnergyOrange
@@ -87,25 +92,31 @@ import com.example.viewmodel.EditorUiState
 @Composable
 fun AudioAndVoiceInspector(
     uiState: EditorUiState,
+    onSelectAudioRole: (AudioTrackRole) -> Unit,
     onPickAudio: () -> Unit,
     onExtractAudio: () -> Unit,
-    onAudioVolumeChange: (Float) -> Unit,
-    onAudioVoiceEffectChange: (VoiceEffectPreset) -> Unit,
-    onAudioVocalModeChange: (VocalSeparationMode) -> Unit,
-    onToggleAudioNoiseReduction: () -> Unit,
+    onSplitVocalAndMusic: () -> Unit,
+    onAudioVolumeChange: (AudioTrackRole, Float) -> Unit,
+    onAudioTrimChange: (AudioTrackRole, Long, Long) -> Unit,
+    onShiftAudioOffset: (AudioTrackRole, Long) -> Unit,
+    onAudioVoiceEffectChange: (AudioTrackRole, VoiceEffectPreset) -> Unit,
+    onAudioVocalModeChange: (AudioTrackRole, VocalSeparationMode) -> Unit,
+    onToggleAudioNoiseReduction: (AudioTrackRole) -> Unit,
+    onToggleAudioDucking: (AudioTrackRole) -> Unit,
     onClipVoiceEffectChange: (VoiceEffectPreset) -> Unit,
     onClipVocalModeChange: (VocalSeparationMode) -> Unit,
     onToggleClipNoiseReduction: () -> Unit,
-    onToggleFade: (Boolean?, Boolean?) -> Unit,
-    onRemoveAudio: () -> Unit,
+    onToggleFade: (AudioTrackRole, Boolean?, Boolean?) -> Unit,
+    onRemoveAudio: (AudioTrackRole) -> Unit,
     onSynthesizeTtsNarration: (String, TtsVoiceStyle) -> Unit,
     onPolishNarrationScript: (String, (String) -> Unit) -> Unit
 ) {
-    val audio = uiState.timeline.audioTrack
+    val selectedRole = uiState.selectedAudioRole
+    val activeTrack = uiState.activeAudioTrack
     val clip = uiState.selectedClip
-    val activeVoiceEffect = audio?.voiceEffect ?: clip?.voiceEffect ?: VoiceEffectPreset.NONE
-    val activeVocalMode = audio?.vocalMode ?: clip?.vocalMode ?: VocalSeparationMode.ORIGINAL
-    val activeNoise = audio?.noiseReduction ?: clip?.noiseReduction ?: false
+    val activeVoiceEffect = activeTrack?.voiceEffect ?: clip?.voiceEffect ?: VoiceEffectPreset.NONE
+    val activeVocalMode = activeTrack?.vocalMode ?: clip?.vocalMode ?: VocalSeparationMode.ORIGINAL
+    val activeNoise = activeTrack?.noiseReduction ?: clip?.noiseReduction ?: false
 
     var ttsScript by remember { mutableStateOf("") }
     var ttsStyle by remember { mutableStateOf(TtsVoiceStyle.NARATOR_BERAT) }
@@ -113,11 +124,71 @@ fun AudioAndVoiceInspector(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(235.dp)
+            .height(255.dp)
             .verticalScroll(rememberScrollState())
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Mandatory Feature: Pisah Suara & Musik Jadi 2 Track Terpisah
+        Button(
+            onClick = onSplitVocalAndMusic,
+            colors = ButtonDefaults.buttonColors(containerColor = EnergyOrange, contentColor = PureWhite),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("audio_split_2tracks_button")
+        ) {
+            Icon(Icons.AutoMirrored.Filled.CallSplit, null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Pisah Suara & Musik Jadi 2 Track", fontWeight = FontWeight.Bold)
+        }
+
+        // Switcher between Independent Track 1 (Vokal) and Track 2 (Musik)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AudioTrackRole.entries.forEach { role ->
+                val isSelected = selectedRole == role
+                val hasTrack = when (role) {
+                    AudioTrackRole.VOCAL -> uiState.timeline.vocalTrack != null
+                    AudioTrackRole.MUSIC -> (uiState.timeline.musicTrack ?: uiState.timeline.audioTrack) != null
+                }
+                val accent = if (role == AudioTrackRole.VOCAL) EnergyOrange else GoldAccent
+                Surface(
+                    onClick = { onSelectAudioRole(role) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) accent.copy(alpha = 0.20f) else StudioCard,
+                    border = BorderStroke(1.5.dp, if (isSelected) accent else StudioBorder),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("audio_role_${role.name.lowercase()}")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (role == AudioTrackRole.VOCAL) Icons.Filled.RecordVoiceOver else Icons.Filled.MusicNote,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = if (role == AudioTrackRole.VOCAL) {
+                                if (hasTrack) "Vokal (Aktif)" else "Track Vokal"
+                            } else {
+                                if (hasTrack) "Musik (Aktif)" else "Track Musik"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSelected) accent else TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -131,7 +202,10 @@ fun AudioAndVoiceInspector(
             ) {
                 Icon(Icons.Filled.MusicNote, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(if (audio == null) "Pilih Musik" else "Ganti Musik", fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (selectedRole == AudioTrackRole.VOCAL) "Pilih File Suara" else "Pilih File Musik",
+                    fontWeight = FontWeight.Bold
+                )
             }
             OutlinedButton(
                 onClick = onExtractAudio,
@@ -146,7 +220,141 @@ fun AudioAndVoiceInspector(
             }
         }
 
-        // Text-to-Speech (Narasi Suara Otomatis untuk Komik Narasi)
+        if (activeTrack != null) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = StudioCard,
+                border = BorderStroke(
+                    1.dp,
+                    if (selectedRole == AudioTrackRole.VOCAL) EnergyOrange.copy(alpha = 0.6f) else GoldAccent.copy(alpha = 0.6f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${selectedRole.label}: ${activeTrack.title}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (selectedRole == AudioTrackRole.VOCAL) EnergyOrange else GoldAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { onRemoveAudio(selectedRole) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Filled.DeleteOutline, contentDescription = "Hapus Track Audio", tint = CrimsonAlert)
+                        }
+                    }
+
+                    Text(
+                        text = "Volume: ${(activeTrack.volume * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
+                    )
+                    Slider(
+                        value = activeTrack.volume,
+                        onValueChange = { onAudioVolumeChange(selectedRole, it) },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = if (selectedRole == AudioTrackRole.VOCAL) EnergyOrange else GoldAccent,
+                            activeTrackColor = if (selectedRole == AudioTrackRole.VOCAL) EnergyOrange else GoldAccent
+                        )
+                    )
+
+                    val maxDur = activeTrack.durationMs.coerceAtLeast(1000L).toFloat()
+                    Text(
+                        text = "Pangkas Audio: ${formatTimecodeMs(activeTrack.trimStartMs)} - ${formatTimecodeMs(activeTrack.trimEndMs)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
+                    )
+                    RangeSlider(
+                        value = activeTrack.trimStartMs.toFloat()..activeTrack.trimEndMs.toFloat().coerceAtMost(maxDur),
+                        onValueChange = { r ->
+                            onAudioTrimChange(selectedRole, r.start.toLong(), r.endInclusive.toLong())
+                        },
+                        valueRange = 0f..maxDur,
+                        colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Posisi: ${formatTimecodeMs(activeTrack.startOffsetMs)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = PureWhite
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = { onShiftAudioOffset(selectedRole, -500L) },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("-0.5s", style = MaterialTheme.typography.labelSmall, color = PureWhite)
+                            }
+                            OutlinedButton(
+                                onClick = { onShiftAudioOffset(selectedRole, 500L) },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("+0.5s", style = MaterialTheme.typography.labelSmall, color = EnergyOrange)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Fade In", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Switch(
+                                checked = activeTrack.fadeIn,
+                                onCheckedChange = { onToggleFade(selectedRole, it, null) },
+                                colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EnergyOrange)
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Fade Out", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Switch(
+                                checked = activeTrack.fadeOut,
+                                onCheckedChange = { onToggleFade(selectedRole, null, it) },
+                                colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EnergyOrange)
+                            )
+                        }
+                    }
+
+                    if (selectedRole == AudioTrackRole.MUSIC) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Auto-Ducking (Kecilkan Musik Saat Narasi)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextPrimary
+                            )
+                            Switch(
+                                checked = activeTrack.autoDucking,
+                                onCheckedChange = { onToggleAudioDucking(AudioTrackRole.MUSIC) },
+                                colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = GoldAccent)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Text-to-Speech (Narasi Suara Otomatis ke Track Vokal)
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = StudioCard,
@@ -163,7 +371,7 @@ fun AudioAndVoiceInspector(
                 ) {
                     Icon(Icons.Filled.RecordVoiceOver, null, tint = EnergyOrange, modifier = Modifier.size(16.dp))
                     Text(
-                        text = "Narasi Suara Otomatis (TTS Komik)",
+                        text = "Narasi Suara Otomatis (TTS -> Track Vokal)",
                         style = MaterialTheme.typography.labelLarge,
                         color = PureWhite,
                         fontWeight = FontWeight.Bold
@@ -230,49 +438,6 @@ fun AudioAndVoiceInspector(
             }
         }
 
-        if (audio != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Trek A1: ${audio.title}", style = MaterialTheme.typography.labelLarge, color = GoldAccent, modifier = Modifier.weight(1f))
-                IconButton(onClick = onRemoveAudio, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.DeleteOutline, contentDescription = "Hapus Audio", tint = CrimsonAlert)
-                }
-            }
-            Text("Volume Musik / Narasi: ${(audio.volume * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-            Slider(
-                value = audio.volume,
-                onValueChange = onAudioVolumeChange,
-                valueRange = 0f..1f,
-                colors = SliderDefaults.colors(thumbColor = GoldAccent, activeTrackColor = GoldAccent)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Fade In", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Switch(
-                        checked = audio.fadeIn,
-                        onCheckedChange = { onToggleFade(it, null) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EnergyOrange)
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Fade Out", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Switch(
-                        checked = audio.fadeOut,
-                        onCheckedChange = { onToggleFade(null, it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EnergyOrange)
-                    )
-                }
-            }
-        }
-
         Text("Pemisah Vokal & Musik (AI DSP)", style = MaterialTheme.typography.labelLarge, color = EnergyOrange)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(VocalSeparationMode.entries) { mode ->
@@ -280,7 +445,8 @@ fun AudioAndVoiceInspector(
                 FilterChip(
                     selected = selected,
                     onClick = {
-                        if (audio != null) onAudioVocalModeChange(mode) else onClipVocalModeChange(mode)
+                        if (activeTrack != null) onAudioVocalModeChange(selectedRole, mode)
+                        else onClipVocalModeChange(mode)
                     },
                     label = { Text(mode.label) },
                     colors = FilterChipDefaults.filterChipColors(
@@ -298,7 +464,8 @@ fun AudioAndVoiceInspector(
                 FilterChip(
                     selected = selected,
                     onClick = {
-                        if (audio != null) onAudioVoiceEffectChange(fx) else onClipVoiceEffectChange(fx)
+                        if (activeTrack != null) onAudioVoiceEffectChange(selectedRole, fx)
+                        else onClipVoiceEffectChange(fx)
                     },
                     label = { Text(fx.label) },
                     colors = FilterChipDefaults.filterChipColors(
@@ -318,7 +485,8 @@ fun AudioAndVoiceInspector(
             Switch(
                 checked = activeNoise,
                 onCheckedChange = {
-                    if (audio != null) onToggleAudioNoiseReduction() else onToggleClipNoiseReduction()
+                    if (activeTrack != null) onToggleAudioNoiseReduction(selectedRole)
+                    else onToggleClipNoiseReduction()
                 },
                 colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EnergyOrange)
             )
@@ -339,12 +507,17 @@ fun TextAndAiCaptionInspector(
     uiState: EditorUiState,
     onAddText: (String, Long, Long, String, Boolean, Boolean) -> Unit,
     onUpdateSelected: ((TextOverlayItem) -> TextOverlayItem) -> Unit,
+    onUpdateTextById: (String, (TextOverlayItem) -> TextOverlayItem) -> Unit,
+    onSelectText: (String?) -> Unit,
+    onSeekTo: (Long) -> Unit,
     onDeleteSelected: () -> Unit,
     onGenerateAutoCaptions: (String) -> Unit,
+    onAutoTranscribeAndTranslate: (String) -> Unit,
     onTranslateCaptions: (String) -> Unit
 ) {
     val selected = uiState.selectedTextOverlay
     var inputText by remember(selected?.id) { mutableStateOf(selected?.text ?: "") }
+    var targetTranslateLang by remember { mutableStateOf("Indonesia") }
     val styles = remember {
         listOf(
             TextStyleChoice("classic", "Klasik", 0xFFFFFFFF, 0xCC16161A, false),
@@ -354,45 +527,157 @@ fun TextAndAiCaptionInspector(
         )
     }
     val comicStickers = listOf("BOOM!", "BERSAMBUNG...", "BABAK BARU", "WHOSH!")
-    val translateLanguages = listOf("English", "Indonesian", "Japanese", "Korean", "Arabic", "Spanish")
+    val translateLanguages = listOf("Indonesia", "English", "Japanese", "Korean", "Arabic", "Spanish", "Mandarin")
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(235.dp)
+            .height(255.dp)
             .verticalScroll(rememberScrollState())
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // AI Auto-Caption Row
-        Button(
-            onClick = { onGenerateAutoCaptions("Indonesian or English") },
-            colors = ButtonDefaults.buttonColors(containerColor = EnergyOrange, contentColor = PureWhite),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("ai_auto_caption_button")
+        // Mandatory Feature: Suara Otomatis ke Penerjemah
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = StudioCard,
+            border = BorderStroke(1.dp, EnergyOrange.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Filled.ClosedCaption, null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Auto-Caption AI (Speech-to-Text)", fontWeight = FontWeight.Bold)
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Filled.Translate, null, tint = EnergyOrange, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "Suara Otomatis ke Penerjemah",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = "Pilih bahasa tujuan terjemahan dari ucapan video:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(translateLanguages) { lang ->
+                        val active = lang == targetTranslateLang
+                        FilterChip(
+                            selected = active,
+                            onClick = { targetTranslateLang = lang },
+                            label = { Text(lang) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = EnergyOrangeSoft,
+                                selectedLabelColor = EnergyOrange
+                            ),
+                            modifier = Modifier.testTag("speech_translate_lang_${lang.lowercase()}")
+                        )
+                    }
+                }
+                Button(
+                    onClick = { onAutoTranscribeAndTranslate(targetTranslateLang) },
+                    colors = ButtonDefaults.buttonColors(containerColor = EnergyOrange, contentColor = PureWhite),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("ai_speech_to_translate_button")
+                ) {
+                    Icon(Icons.Filled.Translate, null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Deteksi Suara & Terjemahkan ($targetTranslateLang)", fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onGenerateAutoCaptions("Indonesian or English") },
+                        border = BorderStroke(1.dp, GoldAccent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("ai_auto_caption_button")
+                    ) {
+                        Icon(Icons.Filled.ClosedCaption, null, tint = GoldAccent, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Transkrip Asli", color = GoldAccent)
+                    }
+                    if (uiState.timeline.textOverlays.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { onTranslateCaptions(targetTranslateLang) },
+                            border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.45f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("ai_translate_existing_button")
+                        ) {
+                            Text("Terjemah Teks Ada", color = PureWhite)
+                        }
+                    }
+                }
+            }
         }
 
+        // Inline Editable Subtitle List (Edit Terjemahan Langsung)
         if (uiState.timeline.textOverlays.isNotEmpty()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(Icons.Filled.Translate, null, tint = GoldAccent, modifier = Modifier.size(16.dp))
-                Text("Terjemahkan AI:", style = MaterialTheme.typography.labelMedium, color = GoldAccent)
-            }
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(translateLanguages) { lang ->
-                    FilterChip(
-                        selected = false,
-                        onClick = { onTranslateCaptions(lang) },
-                        label = { Text(lang) },
-                        modifier = Modifier.testTag("ai_translate_${lang.lowercase()}")
-                    )
+            Text(
+                text = "Daftar Subtitle & Terjemahan (${uiState.timeline.textOverlays.size}) - Edit Langsung:",
+                style = MaterialTheme.typography.labelSmall,
+                color = GoldAccent,
+                fontWeight = FontWeight.Bold
+            )
+            uiState.timeline.textOverlays.forEach { item ->
+                val isSel = item.id == selected?.id
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSel) EnergyOrangeSoft.copy(alpha = 0.45f) else StudioCard,
+                    border = BorderStroke(1.dp, if (isSel) EnergyOrange else StudioBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelectText(item.id)
+                                    onSeekTo(item.startMs)
+                                },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${formatTimecodeMs(item.startMs)} - ${formatTimecodeMs(item.endMs)}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = EnergyOrange,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (!item.originalText.isNullOrBlank()) {
+                                Text(
+                                    text = "Asli: ${item.originalText}",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = TextSecondary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                        OutlinedTextField(
+                            value = item.text,
+                            onValueChange = { updatedText ->
+                                onUpdateTextById(item.id) { it.copy(text = updatedText) }
+                            },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("subtitle_inline_edit_${item.id}")
+                        )
+                    }
                 }
             }
         }
@@ -568,9 +853,12 @@ fun PipOverlayInspector(
     onDeleteSelectedPip: () -> Unit
 ) {
     val selected = uiState.selectedPipOverlay
+    val chromaColors = listOf(0xFF00D84AL, 0xFF0066FFL, 0xFFFF2A55L)
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .height(225.dp)
+            .verticalScroll(rememberScrollState())
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -588,7 +876,7 @@ fun PipOverlayInspector(
             ) {
                 Icon(Icons.Filled.Layers, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Tambah Overlay / PiP", fontWeight = FontWeight.Bold)
+                Text("Tambah Layer / Overlay PiP", fontWeight = FontWeight.Bold)
             }
             if (selected != null) {
                 IconButton(onClick = onDeleteSelectedPip) {
@@ -598,7 +886,8 @@ fun PipOverlayInspector(
         }
 
         if (selected != null) {
-            Text("Mode Blending", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Text("Geser, cubit & putar layer PiP langsung di kanvas pratinjau.", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Text("Mode Blending (Ala KineMaster)", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(BlendModePreset.entries) { mode ->
                     FilterChip(
@@ -617,7 +906,7 @@ fun PipOverlayInspector(
                 Slider(
                     value = selected.scale,
                     onValueChange = { v -> onUpdateSelectedPip { it.copy(scale = v) } },
-                    valueRange = 0.18f..0.75f,
+                    valueRange = 0.16f..0.95f,
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
                 )
@@ -631,6 +920,49 @@ fun PipOverlayInspector(
                     modifier = Modifier.weight(1f),
                     colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
                 )
+            }
+
+            // Per-layer Chroma Key on PiP
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Chroma Key Layer (Green Screen)", style = MaterialTheme.typography.labelMedium, color = PureWhite)
+                Switch(
+                    checked = selected.chromaEnabled,
+                    onCheckedChange = { enabled -> onUpdateSelectedPip { it.copy(chromaEnabled = enabled) } },
+                    colors = SwitchDefaults.colors(checkedThumbColor = PureWhite, checkedTrackColor = EmeraldSuccess)
+                )
+            }
+            if (selected.chromaEnabled) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Kunci:", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    chromaColors.forEach { hex ->
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(hex))
+                                .border(
+                                    width = if (selected.chromaKeyHex == hex) 2.dp else 1.dp,
+                                    color = if (selected.chromaKeyHex == hex) EnergyOrange else StudioBorder,
+                                    shape = CircleShape
+                                )
+                                .clickable { onUpdateSelectedPip { it.copy(chromaKeyHex = hex) } }
+                        )
+                    }
+                    Slider(
+                        value = selected.chromaTolerance,
+                        onValueChange = { tol -> onUpdateSelectedPip { it.copy(chromaTolerance = tol) } },
+                        valueRange = 0.05f..0.75f,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(thumbColor = EmeraldSuccess, activeTrackColor = EmeraldSuccess)
+                    )
+                }
             }
         }
     }

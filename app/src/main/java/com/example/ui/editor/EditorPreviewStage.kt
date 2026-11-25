@@ -13,8 +13,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -88,8 +88,10 @@ import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.media.Media3EffectsFactory
 import com.example.media.VoiceEffectsAudioProcessor
+import com.example.model.AudioTrackItem
 import com.example.model.BlendModePreset
 import com.example.model.CanvasFitMode
+import com.example.model.PanZoomPreset
 import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
 import com.example.model.TextAnimationType
@@ -110,6 +112,7 @@ import com.example.ui.theme.StudioObsidian
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -129,10 +132,11 @@ fun EditorPreviewStage(
     onPlaybackEnded: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    onTransformClip: (Float, Float, Float, Float) -> Unit,
     onSelectText: (String?) -> Unit,
-    onMoveText: (String, Float, Float) -> Unit,
+    onTransformText: (String, Float, Float, Float, Float) -> Unit,
     onSelectPip: (String?) -> Unit,
-    onMovePip: (String, Float, Float) -> Unit,
+    onTransformPip: (String, Float, Float, Float, Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -143,7 +147,8 @@ fun EditorPreviewStage(
     val latestPosition by rememberUpdatedState(currentPositionMs)
 
     val videoAudioProcessor = remember { VoiceEffectsAudioProcessor() }
-    val bgAudioProcessor = remember { VoiceEffectsAudioProcessor() }
+    val vocalAudioProcessor = remember { VoiceEffectsAudioProcessor() }
+    val musicAudioProcessor = remember { VoiceEffectsAudioProcessor() }
 
     val videoPlayer = remember {
         val rf = object : DefaultRenderersFactory(context) {
@@ -164,7 +169,7 @@ fun EditorPreviewStage(
         }
     }
 
-    val audioPlayer = remember {
+    val vocalPlayer = remember {
         val rf = object : DefaultRenderersFactory(context) {
             override fun buildAudioSink(
                 context: Context,
@@ -174,19 +179,39 @@ fun EditorPreviewStage(
                 return DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .setAudioProcessors(arrayOf(bgAudioProcessor))
+                    .setAudioProcessors(arrayOf(vocalAudioProcessor))
                     .build()
             }
         }
         ExoPlayer.Builder(context, rf).build().apply {
-            repeatMode = Player.REPEAT_MODE_ALL
+            repeatMode = Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val musicPlayer = remember {
+        val rf = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(musicAudioProcessor))
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(context, rf).build().apply {
+            repeatMode = Player.REPEAT_MODE_OFF
         }
     }
 
     DisposableEffect(Unit) {
         onDispose {
             videoPlayer.release()
-            audioPlayer.release()
+            vocalPlayer.release()
+            musicPlayer.release()
         }
     }
 
@@ -196,6 +221,7 @@ fun EditorPreviewStage(
     val activeClipIndex = activeSlot?.first ?: -1
     val activeClip = timeline.clips.getOrNull(activeClipIndex)
     val activeOffsetEffectiveMs = activeSlot?.second ?: 0L
+    val effectiveMusicTrack = timeline.musicTrack ?: timeline.audioTrack
 
     var preparedClipSignature by remember { mutableIntStateOf(0) }
 
@@ -225,8 +251,16 @@ fun EditorPreviewStage(
                     .build()
             )
             .build()
+        // Keep touch transform & PanZoom in Compose graphicsLayer for zero-flicker 60fps interaction
+        val previewClip = activeClip.copy(
+            userScale = 1f,
+            posX = 0f,
+            posY = 0f,
+            freeRotationDeg = 0f,
+            panZoom = PanZoomPreset.NONE
+        )
         val effects = Media3EffectsFactory.buildClipVideoEffects(
-            clip = activeClip,
+            clip = previewClip,
             filter = timeline.filterPreset,
             videoEffect = timeline.videoEffect,
             adjustments = timeline.adjustments
@@ -240,7 +274,6 @@ fun EditorPreviewStage(
         preparedClipSignature++
     }
 
-    // Sync clip speed, curve, voice pitch, DSP processor, and volume
     LaunchedEffect(
         activeClip?.speed,
         activeClip?.speedCurve,
@@ -271,34 +304,103 @@ fun EditorPreviewStage(
         }
     }
 
-    // Sync background audio track
-    LaunchedEffect(timeline.audioTrack?.uriString) {
-        val bg = timeline.audioTrack
-        if (bg == null) {
-            audioPlayer.stop()
-            audioPlayer.clearMediaItems()
+    // Prepare Track 1: Vocal / Narration
+    LaunchedEffect(
+        timeline.vocalTrack?.uriString,
+        timeline.vocalTrack?.trimStartMs,
+        timeline.vocalTrack?.trimEndMs
+    ) {
+        val vocal = timeline.vocalTrack
+        if (vocal == null) {
+            vocalPlayer.stop()
+            vocalPlayer.clearMediaItems()
         } else {
-            audioPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(bg.uriString)))
-            audioPlayer.prepare()
+            val item = MediaItem.Builder()
+                .setUri(Uri.parse(vocal.uriString))
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(vocal.trimStartMs)
+                        .setEndPositionMs(vocal.trimEndMs.coerceAtLeast(vocal.trimStartMs + 400L))
+                        .build()
+                )
+                .build()
+            vocalPlayer.setMediaItem(item)
+            vocalPlayer.prepare()
         }
     }
 
+    // Prepare Track 2: Music / BGM
     LaunchedEffect(
-        timeline.audioTrack?.volume,
-        timeline.audioTrack?.voiceEffect,
-        timeline.audioTrack?.vocalMode,
-        timeline.audioTrack?.noiseReduction,
+        effectiveMusicTrack?.uriString,
+        effectiveMusicTrack?.trimStartMs,
+        effectiveMusicTrack?.trimEndMs
+    ) {
+        val music = effectiveMusicTrack
+        if (music == null) {
+            musicPlayer.stop()
+            musicPlayer.clearMediaItems()
+        } else {
+            val item = MediaItem.Builder()
+                .setUri(Uri.parse(music.uriString))
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(music.trimStartMs)
+                        .setEndPositionMs(music.trimEndMs.coerceAtLeast(music.trimStartMs + 400L))
+                        .build()
+                )
+                .build()
+            musicPlayer.setMediaItem(item)
+            musicPlayer.prepare()
+        }
+    }
+
+    fun isTrackActiveAt(track: AudioTrackItem?, posMs: Long): Boolean {
+        if (track == null) return false
+        return posMs in track.startOffsetMs until (track.startOffsetMs + track.effectiveDurationMs)
+    }
+
+    // Sync Vocal & Music DSP, Fade & Ducking Volume
+    LaunchedEffect(
+        timeline.vocalTrack,
+        effectiveMusicTrack,
+        currentPositionMs,
         isPreviewMuted
     ) {
-        val bg = timeline.audioTrack
-        if (bg != null) {
-            bgAudioProcessor.voiceEffect = bg.voiceEffect
-            bgAudioProcessor.vocalMode = bg.vocalMode
-            bgAudioProcessor.noiseReduction = bg.noiseReduction
-            audioPlayer.playbackParameters = PlaybackParameters(1.0f, bg.voiceEffect.pitchMultiplier)
-            audioPlayer.volume = if (isPreviewMuted) 0f else bg.volume.coerceIn(0f, 1f)
+        val vocal = timeline.vocalTrack
+        val vocalActive = isTrackActiveAt(vocal, currentPositionMs)
+        if (vocal != null) {
+            vocalAudioProcessor.voiceEffect = vocal.voiceEffect
+            vocalAudioProcessor.vocalMode = vocal.vocalMode
+            vocalAudioProcessor.noiseReduction = vocal.noiseReduction
+            vocalPlayer.playbackParameters = PlaybackParameters(1.0f, vocal.voiceEffect.pitchMultiplier)
+            var v = if (isPreviewMuted || !vocalActive) 0f else vocal.volume.coerceIn(0f, 1f)
+            val localPos = (currentPositionMs - vocal.startOffsetMs).coerceAtLeast(0L)
+            if (vocal.fadeIn && localPos < 600L) v *= (localPos / 600f).coerceIn(0.1f, 1f)
+            if (vocal.fadeOut && vocal.effectiveDurationMs - localPos < 600L) {
+                v *= ((vocal.effectiveDurationMs - localPos) / 600f).coerceIn(0.1f, 1f)
+            }
+            vocalPlayer.volume = v
         } else {
-            audioPlayer.volume = 0f
+            vocalPlayer.volume = 0f
+        }
+
+        val music = effectiveMusicTrack
+        val musicActive = isTrackActiveAt(music, currentPositionMs)
+        if (music != null) {
+            musicAudioProcessor.voiceEffect = music.voiceEffect
+            musicAudioProcessor.vocalMode = music.vocalMode
+            musicAudioProcessor.noiseReduction = music.noiseReduction
+            musicPlayer.playbackParameters = PlaybackParameters(1.0f, music.voiceEffect.pitchMultiplier)
+            val duckFactor = if (vocalActive && music.autoDucking) 0.42f else 1.0f
+            var m = if (isPreviewMuted || !musicActive) 0f else (music.volume * duckFactor).coerceIn(0f, 1f)
+            val localPos = (currentPositionMs - music.startOffsetMs).coerceAtLeast(0L)
+            if (music.fadeIn && localPos < 700L) m *= (localPos / 700f).coerceIn(0.1f, 1f)
+            if (music.fadeOut && music.effectiveDurationMs - localPos < 700L) {
+                m *= ((music.effectiveDurationMs - localPos) / 700f).coerceIn(0.1f, 1f)
+            }
+            musicPlayer.volume = m
+        } else {
+            musicPlayer.volume = 0f
         }
     }
 
@@ -306,13 +408,33 @@ fun EditorPreviewStage(
         if (!isPlaying && activeClip != null && !activeClip.isImage) {
             val targetPlayerPos = (activeOffsetEffectiveMs * activeClip.effectiveSpeedAverage).toLong()
                 .coerceIn(0L, activeClip.trimmedSourceDurationMs)
-            if (kotlin.math.abs(videoPlayer.currentPosition - targetPlayerPos) > 90L) {
+            if (abs(videoPlayer.currentPosition - targetPlayerPos) > 90L) {
                 videoPlayer.seekTo(targetPlayerPos)
             }
         }
-        if (!isPlaying && timeline.audioTrack != null) {
-            val dur = timeline.audioTrack.durationMs.coerceAtLeast(1000L)
-            audioPlayer.seekTo(currentPositionMs % dur)
+        val vocal = timeline.vocalTrack
+        if (vocal != null) {
+            if (isTrackActiveAt(vocal, currentPositionMs)) {
+                val localPos = (currentPositionMs - vocal.startOffsetMs).coerceIn(0L, vocal.effectiveDurationMs)
+                if (!isPlaying || abs(vocalPlayer.currentPosition - localPos) > 250L) {
+                    vocalPlayer.seekTo(localPos)
+                }
+                if (isPlaying && !vocalPlayer.isPlaying) vocalPlayer.play()
+            } else if (vocalPlayer.isPlaying) {
+                vocalPlayer.pause()
+            }
+        }
+        val music = effectiveMusicTrack
+        if (music != null) {
+            if (isTrackActiveAt(music, currentPositionMs)) {
+                val localPos = (currentPositionMs - music.startOffsetMs).coerceIn(0L, music.effectiveDurationMs)
+                if (!isPlaying || abs(musicPlayer.currentPosition - localPos) > 250L) {
+                    musicPlayer.seekTo(localPos)
+                }
+                if (isPlaying && !musicPlayer.isPlaying) musicPlayer.play()
+            } else if (musicPlayer.isPlaying) {
+                musicPlayer.pause()
+            }
         }
     }
 
@@ -323,10 +445,17 @@ fun EditorPreviewStage(
             } else {
                 videoPlayer.play()
             }
-            if (latestTimeline.audioTrack != null) {
-                val dur = latestTimeline.audioTrack!!.durationMs.coerceAtLeast(1000L)
-                audioPlayer.seekTo(latestPosition % dur)
-                audioPlayer.play()
+            latestTimeline.vocalTrack?.let { vocal ->
+                if (isTrackActiveAt(vocal, latestPosition)) {
+                    vocalPlayer.seekTo((latestPosition - vocal.startOffsetMs).coerceIn(0L, vocal.effectiveDurationMs))
+                    vocalPlayer.play()
+                }
+            }
+            (latestTimeline.musicTrack ?: latestTimeline.audioTrack)?.let { music ->
+                if (isTrackActiveAt(music, latestPosition)) {
+                    musicPlayer.seekTo((latestPosition - music.startOffsetMs).coerceIn(0L, music.effectiveDurationMs))
+                    musicPlayer.play()
+                }
             }
 
             var lastFrameTime = System.currentTimeMillis()
@@ -359,7 +488,8 @@ fun EditorPreviewStage(
             }
         } else {
             videoPlayer.pause()
-            audioPlayer.pause()
+            vocalPlayer.pause()
+            musicPlayer.pause()
         }
     }
 
@@ -419,12 +549,6 @@ fun EditorPreviewStage(
                             }
                         )
                         .border(1.dp, StudioBorder, RoundedCornerShape(12.dp))
-                        .pointerInput(Unit) {
-                            detectTapGestures {
-                                onSelectText(null)
-                                onSelectPip(null)
-                            }
-                        }
                 ) {
                     val stageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }.coerceAtLeast(1f)
                     val stageHeightPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
@@ -449,23 +573,65 @@ fun EditorPreviewStage(
                         )
                     }
 
-                    val mediaModifier = Modifier
+                    // Live Pan & Zoom calculation
+                    val clipProgress = if (activeClip != null) {
+                        (activeOffsetEffectiveMs.toFloat() / activeClip.effectiveDurationMs.coerceAtLeast(1L)).coerceIn(0f, 1f)
+                    } else 0f
+                    val pzScale = when (activeClip?.panZoom) {
+                        PanZoomPreset.ZOOM_IN -> 1f + 0.24f * clipProgress
+                        PanZoomPreset.ZOOM_OUT -> 1.24f - 0.24f * clipProgress
+                        PanZoomPreset.PAN_LEFT, PanZoomPreset.PAN_RIGHT -> 1.18f
+                        else -> 1f
+                    }
+                    val pzOffsetX = when (activeClip?.panZoom) {
+                        PanZoomPreset.PAN_LEFT -> (0.08f - 0.16f * clipProgress) * stageWidthPx
+                        PanZoomPreset.PAN_RIGHT -> (-0.08f + 0.16f * clipProgress) * stageWidthPx
+                        else -> 0f
+                    }
+
+                    val stageTouchModifier = Modifier
                         .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                onSelectText(null)
+                                onSelectPip(null)
+                            }
+                        }
+                        .pointerInput(activeClip?.id, stageWidthPx, stageHeightPx) {
+                            detectTransformGestures { _, pan, zoom, rotation ->
+                                onTransformClip(
+                                    pan.x / stageWidthPx,
+                                    pan.y / stageHeightPx,
+                                    zoom,
+                                    rotation
+                                )
+                            }
+                        }
+
+                    val mediaModifier = stageTouchModifier
                         .then(
                             if (timeline.videoEffect == VideoEffectPreset.BLUR) Modifier.blur(6.dp) else Modifier
                         )
                         .graphicsLayer {
-                            if (activeClip?.isImage == true) {
-                                val kfScale = clipKeyframe?.scale ?: 1f
-                                val crop = activeClip.cropScale.coerceIn(1f, 2.5f)
-                                scaleX = kfScale * crop * (if (activeClip.isMirrored) -1f else 1f)
-                                scaleY = kfScale * crop
-                                rotationZ = activeClip.rotationDegrees.toFloat() + (clipKeyframe?.rotationDeg ?: 0f)
-                                translationX = (clipKeyframe?.xOffset ?: 0f) * stageWidthPx
-                                translationY = (clipKeyframe?.yOffset ?: 0f) * stageHeightPx
-                                alpha = clipKeyframe?.opacity ?: 1f
-                            } else if (clipKeyframe != null) {
-                                alpha = clipKeyframe.opacity
+                            if (activeClip != null) {
+                                val userScale = activeClip.userScale.coerceIn(0.4f, 3.2f)
+                                if (activeClip.isImage) {
+                                    val kfScale = clipKeyframe?.scale ?: 1f
+                                    val crop = activeClip.cropScale.coerceIn(1f, 2.5f)
+                                    scaleX = kfScale * crop * userScale * pzScale * (if (activeClip.isMirrored) -1f else 1f)
+                                    scaleY = kfScale * crop * userScale * pzScale
+                                    rotationZ = activeClip.rotationDegrees.toFloat() + activeClip.freeRotationDeg + (clipKeyframe?.rotationDeg ?: 0f)
+                                    translationX = (activeClip.posX + (clipKeyframe?.xOffset ?: 0f)) * stageWidthPx + pzOffsetX
+                                    translationY = (activeClip.posY + (clipKeyframe?.yOffset ?: 0f)) * stageHeightPx
+                                    alpha = clipKeyframe?.opacity ?: 1f
+                                } else {
+                                    scaleX = userScale * pzScale
+                                    scaleY = userScale * pzScale
+                                    rotationZ = activeClip.freeRotationDeg
+                                    translationX = activeClip.posX * stageWidthPx + pzOffsetX
+                                    translationY = activeClip.posY * stageHeightPx
+                                    alpha = clipKeyframe?.opacity ?: 1f
+                                }
                             }
                         }
 
@@ -509,7 +675,7 @@ fun EditorPreviewStage(
                             for (i in 0..8) {
                                 val px = ((i * 73 + 29) % 100) / 100f * size.width
                                 val py = ((i * 41 + 17) % 100) / 100f * size.height
-                                val r = (3f + 4f * kotlin.math.abs(sin(fxPhase + i))).dp.toPx()
+                                val r = (3f + 4f * abs(sin(fxPhase + i))).dp.toPx()
                                 drawCircle(
                                     color = GoldAccent.copy(alpha = 0.72f),
                                     radius = r,
@@ -551,13 +717,13 @@ fun EditorPreviewStage(
                         }
                     }
 
-                    // Active PiP Overlays
+                    // Active PiP Overlays with Direct Drag, Pinch-Zoom & Rotate
                     val visiblePips = timeline.pipOverlays.filter {
                         currentPositionMs in it.startMs..it.endMs
                     }
                     visiblePips.forEach { pip ->
                         val pipSelected = pip.id == selectedPipId
-                        val pipWidth = maxWidth * pip.scale.coerceIn(0.18f, 0.75f)
+                        val pipWidth = maxWidth * pip.scale.coerceIn(0.16f, 0.95f)
                         Box(
                             modifier = Modifier
                                 .offset {
@@ -567,6 +733,9 @@ fun EditorPreviewStage(
                                     )
                                 }
                                 .size(pipWidth)
+                                .graphicsLayer {
+                                    rotationZ = pip.rotationDeg
+                                }
                                 .clip(RoundedCornerShape(8.dp))
                                 .alpha(pip.opacity)
                                 .then(
@@ -577,12 +746,13 @@ fun EditorPreviewStage(
                                     detectTapGestures { onSelectPip(pip.id) }
                                 }
                                 .pointerInput(pip.id, stageWidthPx, stageHeightPx) {
-                                    detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        onMovePip(
+                                    detectTransformGestures { _, pan, zoom, rotation ->
+                                        onTransformPip(
                                             pip.id,
-                                            dragAmount.x / stageWidthPx,
-                                            dragAmount.y / stageHeightPx
+                                            pan.x / stageWidthPx,
+                                            pan.y / stageHeightPx,
+                                            zoom,
+                                            rotation
                                         )
                                     }
                                 }
@@ -596,14 +766,31 @@ fun EditorPreviewStage(
                                     BlendModePreset.MULTIPLY -> ColorFilter.tint(Color.Gray.copy(alpha = 0.3f), BlendMode.Multiply)
                                     BlendModePreset.OVERLAY -> ColorFilter.tint(EnergyOrange.copy(alpha = 0.16f), BlendMode.Overlay)
                                     BlendModePreset.LIGHTEN -> ColorFilter.tint(Color.White.copy(alpha = 0.22f), BlendMode.Lighten)
+                                    BlendModePreset.DARKEN -> ColorFilter.tint(Color.Black.copy(alpha = 0.22f), BlendMode.Darken)
                                     BlendModePreset.NORMAL -> null
                                 },
                                 modifier = Modifier.fillMaxSize()
                             )
+                            if (pip.chromaEnabled) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color.Black.copy(alpha = 0.65f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(3.dp)
+                                ) {
+                                    Text(
+                                        text = "CK",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                        color = EnergyOrange,
+                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    // Active Text & Comic Sticker Overlays
+                    // Active Text & Comic Sticker Overlays with Direct Drag, Pinch-Zoom & Rotate
                     val visibleTexts = timeline.textOverlays.filter {
                         currentPositionMs in it.startMs..it.endMs
                     }
@@ -647,9 +834,9 @@ fun EditorPreviewStage(
                                 }
                                 .graphicsLayer {
                                     alpha = animAlpha
-                                    scaleX = animScale
-                                    scaleY = animScale
-                                    rotationZ = item.curveDegrees
+                                    scaleX = animScale * item.scale
+                                    scaleY = animScale * item.scale
+                                    rotationZ = item.curveDegrees + item.rotationDeg
                                 }
                                 .clip(shape)
                                 .background(Color(item.bgColorHex))
@@ -668,12 +855,13 @@ fun EditorPreviewStage(
                                     detectTapGestures { onSelectText(item.id) }
                                 }
                                 .pointerInput(item.id, stageWidthPx, stageHeightPx) {
-                                    detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        onMoveText(
+                                    detectTransformGestures { _, pan, zoom, rotation ->
+                                        onTransformText(
                                             item.id,
-                                            dragAmount.x / stageWidthPx,
-                                            dragAmount.y / stageHeightPx
+                                            pan.x / stageWidthPx,
+                                            pan.y / stageHeightPx,
+                                            zoom,
+                                            rotation
                                         )
                                     }
                                 }

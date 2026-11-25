@@ -1,12 +1,18 @@
 package com.example
 
 import com.example.model.AspectRatioPreset
+import com.example.model.AudioTrackItem
+import com.example.model.AudioTrackRole
 import com.example.model.BlendModePreset
 import com.example.model.CanvasFitMode
 import com.example.model.ChromaKeyConfig
 import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
+import com.example.model.ImageCropRatio
+import com.example.model.ImageEditorDocument
+import com.example.model.ImageTextLayer
 import com.example.model.KeyframePoint
+import com.example.model.PanZoomPreset
 import com.example.model.PipOverlayItem
 import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
@@ -85,13 +91,45 @@ class ProjectTimelineTest {
     fun `speed curve preset returns valid interpolated multipliers`() {
         assertEquals(1.0f, SpeedCurvePreset.NORMAL.speedMultiplierAt(0.5f), 0.001f)
         val midHero = SpeedCurvePreset.HERO.speedMultiplierAt(0.5f)
-        assertTrue(midHero < 1.0f) // slow-mo dip in Hero curve
+        assertTrue(midHero < 1.0f)
         val startBullet = SpeedCurvePreset.BULLET.speedMultiplierAt(0.0f)
         assertTrue(startBullet > 2.0f)
     }
 
     @Test
-    fun `timeline serialization round-trips komik narasi upgrades`() {
+    fun `dual audio track effectiveDurationMs respects trim bounds`() {
+        val vocal = AudioTrackItem(
+            uriString = "file:///vocal.m4a",
+            title = "Narasi Vokal",
+            role = AudioTrackRole.VOCAL,
+            durationMs = 12_000L,
+            startOffsetMs = 1_500L,
+            trimStartMs = 2_000L,
+            trimEndMs = 9_500L
+        )
+        assertEquals(7_500L, vocal.effectiveDurationMs)
+        assertEquals(AudioTrackRole.VOCAL, vocal.role)
+    }
+
+    @Test
+    fun `image editor document holds touch-first layers and crop ratio`() {
+        val doc = ImageEditorDocument(
+            sourceUriString = "content://img/panel.png",
+            cropRatio = ImageCropRatio.COMIC,
+            rotationDegrees = 90,
+            flipHorizontal = true,
+            removeBackground = true,
+            textLayers = listOf(ImageTextLayer(text = "Babak 1", scale = 1.4f, rotationDeg = -12f))
+        )
+        assertEquals(ImageCropRatio.COMIC, doc.cropRatio)
+        assertEquals(90, doc.rotationDegrees)
+        assertTrue(doc.flipHorizontal)
+        assertTrue(doc.removeBackground)
+        assertEquals("Babak 1", doc.textLayers.first().text)
+    }
+
+    @Test
+    fun `timeline serialization round-trips komik narasi dual audio and touch upgrades`() {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         val original = ProjectTimelineData(
             clips = listOf(
@@ -102,6 +140,11 @@ class ProjectTimelineTest {
                     speedCurve = SpeedCurvePreset.MONTAGE,
                     smoothSlowMo = true,
                     cropScale = 1.35f,
+                    userScale = 1.25f,
+                    posX = 0.1f,
+                    posY = -0.05f,
+                    freeRotationDeg = 12f,
+                    panZoom = PanZoomPreset.ZOOM_IN,
                     isReversed = true,
                     voiceEffect = VoiceEffectPreset.MEGAPHONE,
                     vocalMode = VocalSeparationMode.VOCAL_ONLY,
@@ -115,9 +158,12 @@ class ProjectTimelineTest {
             ),
             textOverlays = listOf(
                 TextOverlayItem(
-                    text = "BOOM!",
+                    text = "LEDAAK!",
+                    originalText = "BOOM!",
                     startMs = 500L,
                     endMs = 2500L,
+                    scale = 1.3f,
+                    rotationDeg = -8f,
                     strokeEnabled = true,
                     useGradient = true,
                     curveDegrees = -6f,
@@ -129,8 +175,25 @@ class ProjectTimelineTest {
             pipOverlays = listOf(
                 PipOverlayItem(
                     uriString = "content://pip/1",
-                    blendMode = BlendModePreset.LIGHTEN
+                    rotationDeg = 15f,
+                    blendMode = BlendModePreset.DARKEN,
+                    chromaEnabled = true
                 )
+            ),
+            vocalTrack = AudioTrackItem(
+                uriString = "file:///vokal.m4a",
+                title = "Vokal Komik",
+                role = AudioTrackRole.VOCAL,
+                durationMs = 8000L,
+                trimEndMs = 8000L
+            ),
+            musicTrack = AudioTrackItem(
+                uriString = "file:///musik.m4a",
+                title = "Musik Epik",
+                role = AudioTrackRole.MUSIC,
+                durationMs = 10000L,
+                trimEndMs = 10000L,
+                autoDucking = true
             ),
             filterPreset = FilterPreset.KOMIK_POP,
             videoEffect = VideoEffectPreset.SPARKLE,

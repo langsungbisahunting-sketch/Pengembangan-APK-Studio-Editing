@@ -11,6 +11,7 @@ import androidx.navigation.toRoute
 import com.example.ui.editor.EditorScreen
 import com.example.ui.home.StudioHomeScreen
 import com.example.viewmodel.EditorViewModel
+import com.example.viewmodel.ImageEditorViewModel
 import com.example.viewmodel.StudioHomeViewModel
 import kotlinx.serialization.Serializable
 
@@ -31,8 +32,10 @@ fun VeloCutNavGraph() {
     ) {
         composable<HomeRoute> {
             val homeViewModel: StudioHomeViewModel = viewModel()
+            val imageEditorViewModel: ImageEditorViewModel = viewModel()
             StudioHomeScreen(
                 viewModel = homeViewModel,
+                imageEditorViewModel = imageEditorViewModel,
                 onOpenProject = { projectId ->
                     navController.navigate(EditorRoute(projectId = projectId))
                 }

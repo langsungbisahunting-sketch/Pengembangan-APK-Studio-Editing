@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PanToolAlt
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VolumeUp
@@ -68,10 +69,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.model.AspectRatioPreset
+import com.example.model.AudioTrackRole
 import com.example.model.CanvasFitMode
 import com.example.model.ChromaKeyConfig
 import com.example.model.ColorAdjustments
 import com.example.model.FilterPreset
+import com.example.model.PanZoomPreset
 import com.example.model.PipOverlayItem
 import com.example.model.SpeedCurvePreset
 import com.example.model.TextOverlayItem
@@ -100,6 +103,8 @@ fun EditorSubPanelContainer(
     onSplitClip: () -> Unit,
     onTrimClip: (Long, Long) -> Unit,
     onCropClip: (Float) -> Unit,
+    onSetPanZoom: (PanZoomPreset) -> Unit,
+    onResetClipTransform: () -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSpeedCurveChange: (SpeedCurvePreset) -> Unit,
     onToggleSmoothSlowMo: () -> Unit,
@@ -111,22 +116,31 @@ fun EditorSubPanelContainer(
     onDuplicateClip: () -> Unit,
     onMoveClip: (Int) -> Unit,
     onDeleteClip: () -> Unit,
+    onSelectAudioRole: (AudioTrackRole) -> Unit,
     onPickAudio: () -> Unit,
-    onAudioVolumeChange: (Float) -> Unit,
-    onAudioVoiceEffectChange: (VoiceEffectPreset) -> Unit,
-    onAudioVocalModeChange: (VocalSeparationMode) -> Unit,
-    onToggleAudioNoiseReduction: () -> Unit,
+    onSplitVocalAndMusic: () -> Unit,
+    onAudioVolumeChange: (AudioTrackRole, Float) -> Unit,
+    onAudioTrimChange: (AudioTrackRole, Long, Long) -> Unit,
+    onShiftAudioOffset: (AudioTrackRole, Long) -> Unit,
+    onAudioVoiceEffectChange: (AudioTrackRole, VoiceEffectPreset) -> Unit,
+    onAudioVocalModeChange: (AudioTrackRole, VocalSeparationMode) -> Unit,
+    onToggleAudioNoiseReduction: (AudioTrackRole) -> Unit,
+    onToggleAudioDucking: (AudioTrackRole) -> Unit,
     onClipVoiceEffectChange: (VoiceEffectPreset) -> Unit,
     onClipVocalModeChange: (VocalSeparationMode) -> Unit,
     onToggleClipNoiseReduction: () -> Unit,
-    onToggleAudioFade: (Boolean?, Boolean?) -> Unit,
-    onRemoveAudio: () -> Unit,
+    onToggleAudioFade: (AudioTrackRole, Boolean?, Boolean?) -> Unit,
+    onRemoveAudio: (AudioTrackRole) -> Unit,
     onSynthesizeTtsNarration: (String, TtsVoiceStyle) -> Unit,
     onPolishNarrationScript: (String, (String) -> Unit) -> Unit,
     onAddText: (String, Long, Long, String, Boolean, Boolean) -> Unit,
     onUpdateSelectedText: ((TextOverlayItem) -> TextOverlayItem) -> Unit,
+    onUpdateTextById: (String, (TextOverlayItem) -> TextOverlayItem) -> Unit,
+    onSelectText: (String?) -> Unit,
+    onSeekTo: (Long) -> Unit,
     onDeleteSelectedText: () -> Unit,
     onGenerateAutoCaptions: (String) -> Unit,
+    onAutoTranscribeAndTranslate: (String) -> Unit,
     onTranslateCaptions: (String) -> Unit,
     onPickPipOverlay: () -> Unit,
     onUpdateSelectedPip: ((PipOverlayItem) -> PipOverlayItem) -> Unit,
@@ -156,6 +170,8 @@ fun EditorSubPanelContainer(
                 onSplitClip = onSplitClip,
                 onTrimClip = onTrimClip,
                 onCropClip = onCropClip,
+                onSetPanZoom = onSetPanZoom,
+                onResetClipTransform = onResetClipTransform,
                 onSpeedChange = onSpeedChange,
                 onSpeedCurveChange = onSpeedCurveChange,
                 onToggleSmoothSlowMo = onToggleSmoothSlowMo,
@@ -171,12 +187,17 @@ fun EditorSubPanelContainer(
 
             EditorToolTab.AUDIO -> AudioAndVoiceInspector(
                 uiState = uiState,
+                onSelectAudioRole = onSelectAudioRole,
                 onPickAudio = onPickAudio,
                 onExtractAudio = onExtractAudio,
+                onSplitVocalAndMusic = onSplitVocalAndMusic,
                 onAudioVolumeChange = onAudioVolumeChange,
+                onAudioTrimChange = onAudioTrimChange,
+                onShiftAudioOffset = onShiftAudioOffset,
                 onAudioVoiceEffectChange = onAudioVoiceEffectChange,
                 onAudioVocalModeChange = onAudioVocalModeChange,
                 onToggleAudioNoiseReduction = onToggleAudioNoiseReduction,
+                onToggleAudioDucking = onToggleAudioDucking,
                 onClipVoiceEffectChange = onClipVoiceEffectChange,
                 onClipVocalModeChange = onClipVocalModeChange,
                 onToggleClipNoiseReduction = onToggleClipNoiseReduction,
@@ -190,8 +211,12 @@ fun EditorSubPanelContainer(
                 uiState = uiState,
                 onAddText = onAddText,
                 onUpdateSelected = onUpdateSelectedText,
+                onUpdateTextById = onUpdateTextById,
+                onSelectText = onSelectText,
+                onSeekTo = onSeekTo,
                 onDeleteSelected = onDeleteSelectedText,
                 onGenerateAutoCaptions = onGenerateAutoCaptions,
+                onAutoTranscribeAndTranslate = onAutoTranscribeAndTranslate,
                 onTranslateCaptions = onTranslateCaptions
             )
 
@@ -259,6 +284,8 @@ private fun ClipEditInspector(
     onSplitClip: () -> Unit,
     onTrimClip: (Long, Long) -> Unit,
     onCropClip: (Float) -> Unit,
+    onSetPanZoom: (PanZoomPreset) -> Unit,
+    onResetClipTransform: () -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSpeedCurveChange: (SpeedCurvePreset) -> Unit,
     onToggleSmoothSlowMo: () -> Unit,
@@ -272,7 +299,7 @@ private fun ClipEditInspector(
     onDeleteClip: () -> Unit
 ) {
     val clip = uiState.selectedClip
-    var subMode by remember { mutableIntStateOf(0) } // 0=Actions, 1=Trim, 2=Speed/Curve, 3=Volume, 4=Crop
+    var subMode by remember { mutableIntStateOf(0) } // 0=Actions, 1=Trim, 2=Speed/Curve, 3=Volume, 4=Crop, 5=Pan&Zoom
 
     Column(
         modifier = Modifier
@@ -332,7 +359,6 @@ private fun ClipEditInspector(
                         }
                     }
 
-                    // Speed Curve Graph Preview
                     if (clip.speedCurve != SpeedCurvePreset.NORMAL) {
                         Canvas(
                             modifier = Modifier
@@ -444,6 +470,47 @@ private fun ClipEditInspector(
                         valueRange = 1.0f..2.5f,
                         colors = SliderDefaults.colors(thumbColor = EnergyOrange, activeTrackColor = EnergyOrange)
                     )
+                    TextButton(onClick = onResetClipTransform) {
+                        Text("Reset Posisi & Cubit Kanvas", color = GoldAccent)
+                    }
+                }
+
+                5 -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pan & Zoom (Gerak Kamera Ken Burns)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = GoldAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(onClick = { subMode = 0 }) {
+                            Text("Kembali", color = TextSecondary)
+                        }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(PanZoomPreset.entries) { pz ->
+                            FilterChip(
+                                selected = clip.panZoom == pz,
+                                onClick = { onSetPanZoom(pz) },
+                                label = { Text(pz.label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = EnergyOrangeSoft,
+                                    selectedLabelColor = EnergyOrange
+                                )
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onResetClipTransform,
+                        border = BorderStroke(1.dp, GoldAccent),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Reset Posisi, Cubit & Putar Klip", color = GoldAccent)
+                    }
                 }
             }
         }
@@ -457,6 +524,11 @@ private fun ClipEditInspector(
             item {
                 MiniActionPill("Pangkas", Icons.Filled.ContentCut, PureWhite, "edit_trim_button") {
                     subMode = if (subMode == 1) 0 else 1
+                }
+            }
+            item {
+                MiniActionPill("Pan & Zoom", Icons.Filled.PanToolAlt, GoldAccent, "edit_pan_zoom_button") {
+                    subMode = if (subMode == 5) 0 else 5
                 }
             }
             item {

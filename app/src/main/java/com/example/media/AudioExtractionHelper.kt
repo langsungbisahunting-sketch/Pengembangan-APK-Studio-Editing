@@ -6,10 +6,18 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
+import com.example.model.AudioTrackItem
+import com.example.model.AudioTrackRole
+import com.example.model.VocalSeparationMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+
+data class SplitAudioResult(
+    val vocalTrack: AudioTrackItem,
+    val musicTrack: AudioTrackItem
+)
 
 object AudioExtractionHelper {
 
@@ -27,6 +35,56 @@ object AudioExtractionHelper {
             outFile.delete()
             null
         }
+    }
+
+    /**
+     * Pisah Suara & Musik Jadi Dua Track Terpisah:
+     * Generates dedicated persistent files and configures separate Vocal (VOCAL_ONLY DSP)
+     * and Instrumental/Music (INSTRUMENTAL_ONLY DSP) tracks for independent mixing & trimming.
+     */
+    suspend fun splitAudioIntoVocalAndMusic(
+        context: Context,
+        sourceUri: Uri,
+        baseTitle: String,
+        durationMs: Long
+    ): SplitAudioResult? = withContext(Dispatchers.IO) {
+        val dir = File(context.filesDir, "extracted_audio").apply { mkdirs() }
+        val safe = baseTitle.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "audio" }
+        val ts = System.currentTimeMillis()
+        val vocalFile = File(dir, "${safe}_vokal_$ts.m4a")
+        val musicFile = File(dir, "${safe}_musik_$ts.m4a")
+
+        val okVocal = remuxAudioTrack(context, sourceUri, vocalFile)
+        if (!okVocal) {
+            vocalFile.delete()
+            return@withContext null
+        }
+        vocalFile.copyTo(musicFile, overwrite = true)
+        val safeDur = durationMs.coerceAtLeast(1000L)
+
+        val vocalItem = AudioTrackItem(
+            uriString = Uri.fromFile(vocalFile).toString(),
+            title = "Vokal: $baseTitle",
+            role = AudioTrackRole.VOCAL,
+            volume = 0.95f,
+            durationMs = safeDur,
+            trimStartMs = 0L,
+            trimEndMs = safeDur,
+            vocalMode = VocalSeparationMode.VOCAL_ONLY,
+            noiseReduction = true
+        )
+        val musicItem = AudioTrackItem(
+            uriString = Uri.fromFile(musicFile).toString(),
+            title = "Musik: $baseTitle",
+            role = AudioTrackRole.MUSIC,
+            volume = 0.65f,
+            durationMs = safeDur,
+            trimStartMs = 0L,
+            trimEndMs = safeDur,
+            autoDucking = true,
+            vocalMode = VocalSeparationMode.INSTRUMENTAL_ONLY
+        )
+        SplitAudioResult(vocalTrack = vocalItem, musicTrack = musicItem)
     }
 
     suspend fun extractAudioToTempM4a(

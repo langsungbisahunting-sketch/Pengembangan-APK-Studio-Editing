@@ -19,7 +19,8 @@ import org.json.JSONObject
 data class CaptionSegment(
     val startMs: Long,
     val endMs: Long,
-    val text: String
+    val text: String,
+    val originalText: String? = null
 )
 
 sealed interface AiTaskResult<out T> {
@@ -44,6 +45,22 @@ class KomikNarasiAiService {
         )
     )
 
+    private val speechTranslateSchema = Schema.obj(
+        properties = mapOf(
+            "captions" to Schema.array(
+                items = Schema.obj(
+                    properties = mapOf(
+                        "startMs" to Schema.integer(description = "Start timestamp in milliseconds"),
+                        "endMs" to Schema.integer(description = "End timestamp in milliseconds"),
+                        "originalText" to Schema.string(description = "Detected original spoken text"),
+                        "translatedText" to Schema.string(description = "Natural translation in target language")
+                    )
+                ),
+                description = "Time-synchronized speech-to-translate subtitle segments"
+            )
+        )
+    )
+
     private val translateSchema = Schema.obj(
         properties = mapOf(
             "translations" to Schema.array(
@@ -63,6 +80,16 @@ class KomikNarasiAiService {
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
                 responseSchema = captionSchema
+            }
+        )
+    }
+
+    private val speechTranslateModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.8-flash",
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = speechTranslateSchema
             }
         )
     }
@@ -111,6 +138,26 @@ class KomikNarasiAiService {
             }
         }
 
+    private suspend fun extractAudioBytes(context: Context, mediaUri: Uri): Pair<ByteArray, String>? {
+        val audioFile = AudioExtractionHelper.extractAudioToTempM4a(context, mediaUri)
+        return when {
+            audioFile != null && audioFile.length() in 1L..18_000_000L -> {
+                val data = audioFile.readBytes()
+                audioFile.delete()
+                data to "audio/mp4"
+            }
+            else -> {
+                audioFile?.delete()
+                val fallbackBytes = context.contentResolver.openInputStream(mediaUri)?.use { input ->
+                    val raw = input.readBytes()
+                    if (raw.size <= 18_000_000) raw else null
+                } ?: return null
+                val mime = context.contentResolver.getType(mediaUri) ?: "video/mp4"
+                fallbackBytes to mime
+            }
+        }
+    }
+
     suspend fun generateAutoCaptions(
         context: Context,
         mediaUri: Uri,
@@ -119,28 +166,10 @@ class KomikNarasiAiService {
         languageHint: String = "Indonesian or English"
     ): AiTaskResult<List<CaptionSegment>> = withContext(Dispatchers.IO) {
         try {
-            val audioFile = AudioExtractionHelper.extractAudioToTempM4a(context, mediaUri)
-            val bytes = when {
-                audioFile != null && audioFile.length() in 1L..18_000_000L -> {
-                    val data = audioFile.readBytes()
-                    audioFile.delete()
-                    data to "audio/mp4"
-                }
-                else -> {
-                    audioFile?.delete()
-                    val fallbackBytes = context.contentResolver.openInputStream(mediaUri)?.use { input ->
-                        val raw = input.readBytes()
-                        if (raw.size <= 18_000_000) raw else null
-                    }
-                    if (fallbackBytes == null) {
-                        return@withContext AiTaskResult.Error(
-                            "Trek audio tidak ditemukan atau ukuran media melebihi batas 18MB."
-                        )
-                    }
-                    val mime = context.contentResolver.getType(mediaUri) ?: "video/mp4"
-                    fallbackBytes to mime
-                }
-            }
+            val bytes = extractAudioBytes(context, mediaUri)
+                ?: return@withContext AiTaskResult.Error(
+                    "Trek audio tidak ditemukan atau ukuran media melebihi batas 18MB."
+                )
 
             val response = withTimeout(60_000L) {
                 captionModel.generateContent(
@@ -185,6 +214,74 @@ class KomikNarasiAiService {
         } catch (e: Exception) {
             Log.e(TAG, "Auto-caption failed", e)
             AiTaskResult.Error(e.localizedMessage ?: "Gagal memproses Auto-Caption.")
+        }
+    }
+
+    /**
+     * Suara Otomatis ke Penerjemah:
+     * Detects spoken audio in the clip, produces synchronized subtitle segments, and immediately
+     * translates them into targetLanguage while preserving the original spoken transcript.
+     */
+    suspend fun transcribeAndTranslateVideo(
+        context: Context,
+        mediaUri: Uri,
+        clipStartOffsetMs: Long,
+        clipDurationMs: Long,
+        targetLanguage: String
+    ): AiTaskResult<List<CaptionSegment>> = withContext(Dispatchers.IO) {
+        try {
+            val bytes = extractAudioBytes(context, mediaUri)
+                ?: return@withContext AiTaskResult.Error(
+                    "Trek suara tidak ditemukan pada media ini atau ukuran melebihi 18MB."
+                )
+
+            val response = withTimeout(60_000L) {
+                speechTranslateModel.generateContent(
+                    content {
+                        inlineData(bytes.first, bytes.second)
+                        text(
+                            "Listen to the spoken dialogue/narration in this audio. " +
+                                "Segment the speech into concise, time-synced subtitle phrases (max 8 words per segment) " +
+                                "within 0..${clipDurationMs}ms. For each segment, return 'originalText' in the spoken language " +
+                                "and 'translatedText' translated naturally into $targetLanguage."
+                        )
+                    }
+                )
+            }
+
+            val rawJson = response.text ?: return@withContext AiTaskResult.Error(
+                "AI tidak mengembalikan hasil deteksi suara & terjemahan."
+            )
+            val root = JSONObject(rawJson)
+            val arr = root.getJSONArray("captions")
+            val segments = (0 until arr.length()).mapNotNull { idx ->
+                val obj = arr.getJSONObject(idx)
+                val translated = obj.optString("translatedText").trim()
+                val original = obj.optString("originalText").trim()
+                val finalText = translated.ifEmpty { original }
+                if (finalText.isEmpty()) return@mapNotNull null
+                val s = obj.optLong("startMs", idx * 2000L).coerceIn(0L, clipDurationMs)
+                val e = obj.optLong("endMs", s + 2000L).coerceIn(s + 400L, clipDurationMs + 500L)
+                CaptionSegment(
+                    startMs = clipStartOffsetMs + s,
+                    endMs = clipStartOffsetMs + e,
+                    text = finalText,
+                    originalText = original.ifEmpty { null }
+                )
+            }
+            if (segments.isEmpty()) {
+                AiTaskResult.Error("Tidak ada ucapan yang terdeteksi untuk diterjemahkan.")
+            } else {
+                AiTaskResult.Success(segments)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Speech-to-translate timed out", e)
+            AiTaskResult.Error("Deteksi & terjemahan suara melebihi batas waktu.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Speech-to-translate failed", e)
+            AiTaskResult.Error(e.localizedMessage ?: "Gagal memproses suara ke penerjemah.")
         }
     }
 

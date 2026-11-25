@@ -7,6 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.Icon
@@ -42,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +56,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +68,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.media.MediaMetadataHelper
+import com.example.model.AudioTrackItem
+import com.example.model.AudioTrackRole
+import com.example.model.PanZoomPreset
 import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
 import com.example.model.TransitionType
@@ -93,15 +101,19 @@ fun TimelinePanel(
     selectedClipIndex: Int,
     selectedTextId: String?,
     selectedPipId: String?,
+    selectedAudioRole: AudioTrackRole,
     timelineZoom: Float,
+    onPinchZoom: (Float) -> Unit,
     onSeekTo: (Long) -> Unit,
     onSelectClip: (Int) -> Unit,
     onTrimClip: (Long, Long) -> Unit,
     onTapTransition: (Int) -> Unit,
     onSelectText: (String) -> Unit,
     onSelectPip: (String) -> Unit,
+    onSelectAudioRole: (AudioTrackRole) -> Unit,
+    onShiftAudioOffset: (AudioTrackRole, Long) -> Unit,
     onAddMediaClick: () -> Unit,
-    onAddAudioClick: () -> Unit,
+    onAddAudioClick: (AudioTrackRole) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -110,6 +122,8 @@ fun TimelinePanel(
     val pxPerSecond = with(density) { dpPerSecond.toPx() }
     val pxPerMs = pxPerSecond / 1000f
     val totalDurationMs = timeline.totalDurationMs.coerceAtLeast(1000L)
+    val latestZoom by rememberUpdatedState(timelineZoom)
+    val latestOnPinchZoom by rememberUpdatedState(onPinchZoom)
 
     LaunchedEffect(currentPositionMs, isPlaying, timelineZoom) {
         val targetScroll = (currentPositionMs * pxPerMs).roundToInt()
@@ -130,6 +144,22 @@ fun TimelinePanel(
             .fillMaxWidth()
             .background(StudioSurface)
             .border(1.dp, StudioBorder)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount >= 2) {
+                            val zoom = event.calculateZoom()
+                            if (abs(zoom - 1f) > 0.01f) {
+                                latestOnPinchZoom(latestZoom * zoom)
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                        if (pressedCount == 0) break
+                    }
+                }
+            }
     ) {
         val halfViewport = maxWidth / 2f
 
@@ -144,7 +174,7 @@ fun TimelinePanel(
                 modifier = Modifier
                     .fillMaxHeight()
                     .padding(vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 // 1. Time Ruler
                 TimelineRuler(
@@ -155,7 +185,7 @@ fun TimelinePanel(
                 // 2. Main Video Track (V1)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.height(62.dp)
+                    modifier = Modifier.height(58.dp)
                 ) {
                     timeline.clips.forEachIndexed { index, clip ->
                         val widthDp = ((clip.effectiveDurationMs / 1000f) * dpPerSecond.value).dp
@@ -227,7 +257,7 @@ fun TimelinePanel(
                     Box(
                         modifier = Modifier
                             .width(((totalDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(160.dp))
-                            .height(26.dp)
+                            .height(24.dp)
                     ) {
                         timeline.pipOverlays.forEach { pip ->
                             val offsetDp = ((pip.startMs / 1000f) * dpPerSecond.value).dp
@@ -273,7 +303,7 @@ fun TimelinePanel(
                     Box(
                         modifier = Modifier
                             .width(((totalDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(160.dp))
-                            .height(26.dp)
+                            .height(24.dp)
                     ) {
                         timeline.textOverlays.forEach { item ->
                             val offsetDp = ((item.startMs / 1000f) * dpPerSecond.value).dp
@@ -314,81 +344,86 @@ fun TimelinePanel(
                     }
                 }
 
-                // 5. Audio / TTS Track (A1)
-                val totalTrackWidthDp = ((totalDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(160.dp)
-                if (timeline.audioTrack != null) {
-                    Surface(
-                        onClick = onAddAudioClick,
-                        shape = RoundedCornerShape(8.dp),
-                        color = GoldSoft,
-                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.75f)),
-                        modifier = Modifier
-                            .width(totalTrackWidthDp)
-                            .height(30.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val barW = 3.dp.toPx()
-                                val gap = 3.dp.toPx()
-                                val step = barW + gap
-                                var x = 4.dp.toPx()
-                                var i = 0
-                                while (x < size.width - 4.dp.toPx()) {
-                                    val amp = (0.25f + 0.65f * abs(sin(i * 0.55f))) * size.height * 0.75f
-                                    drawRoundRect(
-                                        color = GoldAccent.copy(alpha = 0.55f),
-                                        topLeft = Offset(x, (size.height - amp) / 2f),
-                                        size = Size(barW, amp),
-                                        cornerRadius = CornerRadius(2f, 2f)
-                                    )
-                                    x += step
-                                    i++
+                // 5. Track Suara / Vokal / Narasi (A1) & Track Musik Latar (A2)
+                val vocalTrack = timeline.vocalTrack
+                val musicTrack = timeline.musicTrack ?: timeline.audioTrack
+                val canvasWidthDp = ((totalDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(180.dp)
+
+                if (vocalTrack != null) {
+                    AudioTrackLaneBar(
+                        track = vocalTrack,
+                        badgePrefix = "VOK",
+                        icon = Icons.Filled.RecordVoiceOver,
+                        accentColor = EnergyOrange,
+                        containerColor = EnergyOrangeSoft,
+                        isSelected = selectedAudioRole == AudioTrackRole.VOCAL,
+                        canvasWidthDp = canvasWidthDp,
+                        dpPerSecond = dpPerSecond,
+                        pxPerMs = pxPerMs,
+                        onClick = { onSelectAudioRole(AudioTrackRole.VOCAL) },
+                        onShiftDeltaMs = { d -> onShiftAudioOffset(AudioTrackRole.VOCAL, d) },
+                        modifier = Modifier.testTag("timeline_vocal_track")
+                    )
+                }
+
+                if (musicTrack != null) {
+                    AudioTrackLaneBar(
+                        track = musicTrack,
+                        badgePrefix = if (musicTrack.autoDucking) "MUS·DUCK" else "MUS",
+                        icon = Icons.Filled.MusicNote,
+                        accentColor = GoldAccent,
+                        containerColor = GoldSoft,
+                        isSelected = selectedAudioRole == AudioTrackRole.MUSIC,
+                        canvasWidthDp = canvasWidthDp,
+                        dpPerSecond = dpPerSecond,
+                        pxPerMs = pxPerMs,
+                        onClick = { onSelectAudioRole(AudioTrackRole.MUSIC) },
+                        onShiftDeltaMs = { d -> onShiftAudioOffset(AudioTrackRole.MUSIC, d) },
+                        modifier = Modifier.testTag("timeline_music_track")
+                    )
+                }
+
+                if (vocalTrack == null || musicTrack == null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (vocalTrack == null) {
+                            Surface(
+                                onClick = { onAddAudioClick(AudioTrackRole.VOCAL) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = StudioSurfaceElevated,
+                                border = BorderStroke(1.dp, EnergyOrange.copy(alpha = 0.55f)),
+                                modifier = Modifier
+                                    .height(26.dp)
+                                    .testTag("timeline_add_vocal_pill")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(Icons.Filled.RecordVoiceOver, null, tint = EnergyOrange, modifier = Modifier.size(13.dp))
+                                    Text("+ Track Suara / TTS", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                                 }
                             }
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.MusicNote,
-                                    contentDescription = null,
-                                    tint = GoldAccent,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Text(
-                                    text = timeline.audioTrack.title,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
                         }
-                    }
-                } else {
-                    Surface(
-                        onClick = onAddAudioClick,
-                        shape = RoundedCornerShape(8.dp),
-                        color = StudioSurfaceElevated,
-                        border = BorderStroke(1.dp, StudioBorder),
-                        modifier = Modifier
-                            .height(28.dp)
-                            .testTag("timeline_add_audio_pill")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Filled.MusicNote, null, tint = GoldAccent, modifier = Modifier.size(14.dp))
-                            Text(
-                                text = "+ Tambah Musik / Narasi TTS",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextSecondary
-                            )
+                        if (musicTrack == null) {
+                            Surface(
+                                onClick = { onAddAudioClick(AudioTrackRole.MUSIC) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = StudioSurfaceElevated,
+                                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.55f)),
+                                modifier = Modifier
+                                    .height(26.dp)
+                                    .testTag("timeline_add_music_pill")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(Icons.Filled.MusicNote, null, tint = GoldAccent, modifier = Modifier.size(13.dp))
+                                    Text("+ Track Musik", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
                         }
                     }
                 }
@@ -397,7 +432,7 @@ fun TimelinePanel(
             Spacer(modifier = Modifier.width(halfViewport))
         }
 
-        // Fixed Center Playhead (Energy Orange + Pure White)
+        // Fixed Center Playhead
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -419,6 +454,107 @@ fun TimelinePanel(
                     .fillMaxHeight()
                     .background(PureWhite)
             )
+        }
+    }
+}
+
+@Composable
+private fun AudioTrackLaneBar(
+    track: AudioTrackItem,
+    badgePrefix: String,
+    icon: ImageVector,
+    accentColor: Color,
+    containerColor: Color,
+    isSelected: Boolean,
+    canvasWidthDp: Dp,
+    dpPerSecond: Dp,
+    pxPerMs: Float,
+    onClick: () -> Unit,
+    onShiftDeltaMs: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val offsetDp = ((track.startOffsetMs / 1000f) * dpPerSecond.value).dp
+    val trackWidthDp = ((track.effectiveDurationMs / 1000f) * dpPerSecond.value).dp.coerceAtLeast(68.dp)
+    val rowWidth = maxOf(canvasWidthDp, offsetDp + trackWidthDp + 24.dp)
+
+    Box(
+        modifier = modifier
+            .width(rowWidth)
+            .height(27.dp)
+    ) {
+        Surface(
+            onClick = onClick,
+            shape = RoundedCornerShape(8.dp),
+            color = containerColor,
+            border = BorderStroke(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) PureWhite else accentColor.copy(alpha = 0.78f)
+            ),
+            modifier = Modifier
+                .offset(x = offsetDp)
+                .width(trackWidthDp)
+                .fillMaxHeight()
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val barW = 2.5.dp.toPx()
+                    val gap = 2.5.dp.toPx()
+                    val step = barW + gap
+                    var x = 4.dp.toPx()
+                    var i = 0
+                    while (x < size.width - 4.dp.toPx()) {
+                        val amp = (0.25f + 0.65f * abs(sin(i * 0.55f))) * size.height * 0.72f
+                        drawRoundRect(
+                            color = accentColor.copy(alpha = 0.55f),
+                            topLeft = Offset(x, (size.height - amp) / 2f),
+                            size = Size(barW, amp),
+                            cornerRadius = CornerRadius(2f, 2f)
+                        )
+                        x += step
+                        i++
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .width(10.dp)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(accentColor)
+                                .pointerInput(track.id, pxPerMs) {
+                                    detectHorizontalDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        if (pxPerMs > 0f) {
+                                            onShiftDeltaMs((dragAmount / pxPerMs).toLong())
+                                        }
+                                    }
+                                }
+                        )
+                    }
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "$badgePrefix: ${track.title}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     }
 }
@@ -523,7 +659,7 @@ private fun VideoClipTrackItem(
                 .background(Color.Black.copy(alpha = 0.2f))
         )
 
-        // Speed / Curve / Reverse / Crop / Mute badges
+        // Speed / Curve / Reverse / PanZoom / Crop / Mute badges
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
@@ -546,6 +682,17 @@ private fun VideoClipTrackItem(
                         text = "${clip.speed}x",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                         color = PureWhite,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            if (clip.panZoom != PanZoomPreset.NONE) {
+                Surface(shape = RoundedCornerShape(4.dp), color = GoldAccent) {
+                    Text(
+                        text = "PZ",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        color = Color(0xFF1A1200),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
@@ -587,7 +734,7 @@ private fun VideoClipTrackItem(
             }
         }
 
-        // Keyframe Diamond Markers on bottom of clip
+        // Keyframe Diamond Markers
         clip.keyframes.forEach { kf ->
             val kfX = ((kf.timeOffsetMs / 1000f) * dpPerSecond.value).dp
                 .coerceIn(14.dp, (widthDp - 14.dp).coerceAtLeast(14.dp))

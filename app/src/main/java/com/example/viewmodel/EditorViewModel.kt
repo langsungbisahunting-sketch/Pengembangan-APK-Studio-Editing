@@ -18,6 +18,7 @@ import com.example.media.TtsNarrationHelper
 import com.example.media.VideoExportManager
 import com.example.model.AspectRatioPreset
 import com.example.model.AudioTrackItem
+import com.example.model.AudioTrackRole
 import com.example.model.CanvasFitMode
 import com.example.model.ChromaKeyConfig
 import com.example.model.ColorAdjustments
@@ -26,6 +27,7 @@ import com.example.model.ExportFrameRate
 import com.example.model.ExportResolution
 import com.example.model.FilterPreset
 import com.example.model.KeyframePoint
+import com.example.model.PanZoomPreset
 import com.example.model.PipOverlayItem
 import com.example.model.ProjectTimelineData
 import com.example.model.SpeedCurvePreset
@@ -50,7 +52,7 @@ import kotlin.math.abs
 enum class EditorToolTab(val label: String) {
     MAIN("Utama"),
     EDIT("Edit"),
-    AUDIO("Audio & TTS"),
+    AUDIO("Audio 2-Track"),
     TEXT("Teks & AI"),
     PIP("Overlay"),
     EFFECTS("Efek"),
@@ -86,10 +88,10 @@ data class EditorUiState(
     val selectedClipIndex: Int = 0,
     val selectedTextId: String? = null,
     val selectedPipId: String? = null,
+    val selectedAudioRole: AudioTrackRole = AudioTrackRole.MUSIC,
     val activeToolTab: EditorToolTab = EditorToolTab.MAIN,
     val timelineZoom: Float = 1.0f,
     val isPreviewMuted: Boolean = false,
-    // Default 720p for smooth rendering on entry-level & mid-range phones (e.g., Infinix Smart 8)
     val exportResolution: ExportResolution = ExportResolution.HD_720,
     val exportFrameRate: ExportFrameRate = ExportFrameRate.FPS_30,
     val exportBitrate: ExportBitrate = ExportBitrate.STANDARD,
@@ -107,6 +109,12 @@ data class EditorUiState(
 
     val selectedPipOverlay: PipOverlayItem?
         get() = timeline.pipOverlays.firstOrNull { it.id == selectedPipId }
+
+    val activeAudioTrack: AudioTrackItem?
+        get() = when (selectedAudioRole) {
+            AudioTrackRole.VOCAL -> timeline.vocalTrack
+            AudioTrackRole.MUSIC -> timeline.musicTrack
+        }
 }
 
 @UnstableApi
@@ -140,7 +148,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                         projectId = entity.id,
                         projectTitle = entity.title,
                         timeline = timeline,
-                        selectedClipIndex = if (timeline.clips.isNotEmpty()) 0 else -1
+                        selectedClipIndex = if (timeline.clips.isNotEmpty()) 0 else -1,
+                        selectedAudioRole = if (timeline.vocalTrack != null) AudioTrackRole.VOCAL else AudioTrackRole.MUSIC
                     )
                 }
             } else {
@@ -237,6 +246,15 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun selectAudioRole(role: AudioTrackRole) {
+        _uiState.update {
+            it.copy(
+                selectedAudioRole = role,
+                activeToolTab = EditorToolTab.AUDIO
+            )
+        }
+    }
+
     fun setActiveToolTab(tab: EditorToolTab) {
         _uiState.update { it.copy(activeToolTab = tab) }
     }
@@ -296,7 +314,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         val current = _uiState.value.timeline
         val updated = transform(current)
         if (updated == current) return
-        if (undoStack.size >= 25) undoStack.removeFirst()
+        if (undoStack.size >= 30) undoStack.removeFirst()
         undoStack.addLast(current)
         redoStack.clear()
 
@@ -432,6 +450,48 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setSelectedClipPanZoom(panZoom: PanZoomPreset) {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        mutateTimeline(pausePlayback = false) { timeline ->
+            val list = timeline.clips.toMutableList()
+            list[idx] = clip.copy(panZoom = panZoom)
+            timeline.copy(clips = list)
+        }
+    }
+
+    // Touch-first direct finger transform on Canvas for selected Video/Image clip
+    fun transformSelectedClip(
+        dxFraction: Float,
+        dyFraction: Float,
+        scaleFactor: Float,
+        rotationDelta: Float
+    ) {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        _uiState.update { state ->
+            val list = state.timeline.clips.toMutableList()
+            list[idx] = clip.copy(
+                posX = (clip.posX + dxFraction).coerceIn(-0.6f, 0.6f),
+                posY = (clip.posY + dyFraction).coerceIn(-0.6f, 0.6f),
+                userScale = (clip.userScale * scaleFactor).coerceIn(0.4f, 3.2f),
+                freeRotationDeg = ((clip.freeRotationDeg + rotationDelta) % 360f)
+            )
+            state.copy(timeline = state.timeline.copy(clips = list))
+        }
+        scheduleAutoSave()
+    }
+
+    fun resetSelectedClipTransform() {
+        val idx = _uiState.value.selectedClipIndex
+        val clip = _uiState.value.selectedClip ?: return
+        mutateTimeline(pausePlayback = false) { timeline ->
+            val list = timeline.clips.toMutableList()
+            list[idx] = clip.copy(posX = 0f, posY = 0f, userScale = 1.0f, freeRotationDeg = 0f)
+            timeline.copy(clips = list)
+        }
+    }
+
     fun toggleReverseSelectedClip() {
         val idx = _uiState.value.selectedClipIndex
         val clip = _uiState.value.selectedClip ?: return
@@ -504,18 +564,92 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                 _uiState.update { it.copy(statusBanner = "Video ini tidak memiliki trek audio") }
                 return@launch
             }
+            val dur = clip.sourceDurationMs.coerceAtLeast(1000L)
             val audio = AudioTrackItem(
                 uriString = Uri.fromFile(outFile).toString(),
                 title = "Ekstrak: ${clip.displayName.substringBeforeLast('.')}",
-                volume = clip.volume.coerceAtLeast(0.8f),
-                durationMs = clip.sourceDurationMs
+                role = AudioTrackRole.VOCAL,
+                volume = clip.volume.coerceAtLeast(0.85f),
+                durationMs = dur,
+                trimStartMs = 0L,
+                trimEndMs = dur
             )
             mutateTimeline { timeline ->
                 val list = timeline.clips.toMutableList()
                 list[idx] = clip.copy(volume = 0f)
-                timeline.copy(clips = list, audioTrack = audio)
+                timeline.copy(clips = list, vocalTrack = audio)
             }
-            _uiState.update { it.copy(statusBanner = "Audio berhasil diekstrak ke trek A1") }
+            _uiState.update {
+                it.copy(
+                    selectedAudioRole = AudioTrackRole.VOCAL,
+                    statusBanner = "Audio diekstrak ke Track Vokal"
+                )
+            }
+        }
+    }
+
+    /**
+     * Pisah Suara & Musik Jadi Dua Track Terpisah:
+     * Extracts from selected video clip (or splits active audio) into two independent tracks:
+     * 1) Track Suara/Vokal/Narasi
+     * 2) Track Musik Latar/Instrumen
+     */
+    fun splitAudioIntoVocalAndMusicTracks() {
+        val state = _uiState.value
+        val clip = state.selectedClip
+        val sourceUri = when {
+            clip != null && !clip.isImage -> Uri.parse(clip.uriString)
+            state.timeline.musicTrack != null -> Uri.parse(state.timeline.musicTrack.uriString)
+            state.timeline.vocalTrack != null -> Uri.parse(state.timeline.vocalTrack.uriString)
+            else -> null
+        }
+        if (sourceUri == null) {
+            _uiState.update { it.copy(statusBanner = "Pilih klip video atau tambah audio terlebih dahulu") }
+            return
+        }
+        val title = clip?.displayName?.substringBeforeLast('.')
+            ?: state.timeline.musicTrack?.title
+            ?: "Audio"
+        val dur = clip?.sourceDurationMs
+            ?: state.timeline.musicTrack?.durationMs
+            ?: state.timeline.totalDurationMs.coerceAtLeast(3000L)
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(aiTaskState = AiTaskState.Loading("Memisahkan Suara & Musik jadi 2 Track...")) }
+            val result = AudioExtractionHelper.splitAudioIntoVocalAndMusic(
+                context = getApplication(),
+                sourceUri = sourceUri,
+                baseTitle = title,
+                durationMs = dur
+            )
+            if (result == null) {
+                _uiState.update {
+                    it.copy(
+                        aiTaskState = AiTaskState.Idle,
+                        statusBanner = "Video/klip ini tidak memiliki jalur audio untuk dipisahkan"
+                    )
+                }
+                return@launch
+            }
+            mutateTimeline { timeline ->
+                val updatedClips = if (clip != null && !clip.isImage && state.selectedClipIndex in timeline.clips.indices) {
+                    timeline.clips.toMutableList().also {
+                        it[state.selectedClipIndex] = clip.copy(volume = 0f)
+                    }
+                } else timeline.clips
+                timeline.copy(
+                    clips = updatedClips,
+                    vocalTrack = result.vocalTrack,
+                    musicTrack = result.musicTrack
+                )
+            }
+            _uiState.update {
+                it.copy(
+                    aiTaskState = AiTaskState.Idle,
+                    selectedAudioRole = AudioTrackRole.VOCAL,
+                    statusBanner = "Berhasil! Track Vokal & Track Musik kini terpisah"
+                )
+            }
         }
     }
 
@@ -545,14 +679,18 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             val audio = AudioTrackItem(
                 uriString = result.uriString,
                 title = result.title,
+                role = AudioTrackRole.VOCAL,
                 volume = 0.95f,
-                durationMs = result.durationMs
+                durationMs = result.durationMs,
+                trimStartMs = 0L,
+                trimEndMs = result.durationMs
             )
-            mutateTimeline(pausePlayback = false) { it.copy(audioTrack = audio) }
+            mutateTimeline(pausePlayback = false) { it.copy(vocalTrack = audio) }
             _uiState.update {
                 it.copy(
                     aiTaskState = AiTaskState.Idle,
-                    statusBanner = "${result.title} ditambahkan ke trek audio!"
+                    selectedAudioRole = AudioTrackRole.VOCAL,
+                    statusBanner = "${result.title} ditambahkan ke Track Suara/Vokal!"
                 )
             }
         }
@@ -768,8 +906,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(selectedTextId = item.id) }
     }
 
-    fun updateSelectedTextOverlay(transform: (TextOverlayItem) -> TextOverlayItem) {
-        val id = _uiState.value.selectedTextId ?: return
+    fun updateTextOverlayById(id: String, transform: (TextOverlayItem) -> TextOverlayItem) {
         mutateTimeline(pausePlayback = false) { timeline ->
             timeline.copy(
                 textOverlays = timeline.textOverlays.map {
@@ -779,14 +916,27 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun moveTextOverlayPosition(id: String, dxFraction: Float, dyFraction: Float) {
+    fun updateSelectedTextOverlay(transform: (TextOverlayItem) -> TextOverlayItem) {
+        val id = _uiState.value.selectedTextId ?: return
+        updateTextOverlayById(id, transform)
+    }
+
+    fun transformTextOverlay(
+        id: String,
+        dxFraction: Float,
+        dyFraction: Float,
+        scaleFactor: Float,
+        rotationDelta: Float
+    ) {
         _uiState.update { state ->
             val updated = state.timeline.copy(
                 textOverlays = state.timeline.textOverlays.map {
                     if (it.id == id) {
                         it.copy(
-                            xFraction = (it.xFraction + dxFraction).coerceIn(0.1f, 0.9f),
-                            yFraction = (it.yFraction + dyFraction).coerceIn(0.1f, 0.9f)
+                            xFraction = (it.xFraction + dxFraction).coerceIn(0.08f, 0.92f),
+                            yFraction = (it.yFraction + dyFraction).coerceIn(0.08f, 0.92f),
+                            scale = (it.scale * scaleFactor).coerceIn(0.5f, 3.0f),
+                            rotationDeg = ((it.rotationDeg + rotationDelta) % 360f)
                         )
                     } else it
                 }
@@ -851,6 +1001,70 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * Suara Otomatis ke Penerjemah:
+     * Detects spoken audio in the video/clip (or vocal track) and directly produces
+     * time-synced translated subtitles in targetLanguage, editable in timeline & list.
+     */
+    fun autoTranscribeAndTranslate(targetLanguage: String) {
+        val state = _uiState.value
+        val clip = state.selectedClip ?: state.timeline.clips.firstOrNull()
+        val mediaUri = when {
+            state.timeline.vocalTrack != null -> Uri.parse(state.timeline.vocalTrack.uriString)
+            clip != null -> Uri.parse(clip.uriString)
+            else -> null
+        } ?: return
+
+        val clipIdx = if (state.selectedClip != null) state.selectedClipIndex else 0
+        val startOffset = if (state.timeline.vocalTrack != null) state.timeline.vocalTrack.startOffsetMs
+        else state.timeline.clipStartPositionMs(clipIdx)
+        val dur = clip?.effectiveDurationMs ?: state.timeline.totalDurationMs.coerceAtLeast(3000L)
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(aiTaskState = AiTaskState.Loading("Mendeteksi suara & menerjemahkan ke $targetLanguage..."))
+            }
+            val result = aiService.transcribeAndTranslateVideo(
+                context = getApplication(),
+                mediaUri = mediaUri,
+                clipStartOffsetMs = startOffset,
+                clipDurationMs = dur,
+                targetLanguage = targetLanguage
+            )
+            when (result) {
+                is AiTaskResult.Success -> {
+                    val generated = result.data.map { seg ->
+                        TextOverlayItem(
+                            text = seg.text,
+                            originalText = seg.originalText,
+                            startMs = seg.startMs,
+                            endMs = seg.endMs,
+                            xFraction = 0.5f,
+                            yFraction = 0.80f,
+                            fontSizeSp = 20f,
+                            colorHex = 0xFFFFFFFF,
+                            bgColorHex = 0xCC16161A,
+                            styleId = "classic"
+                        )
+                    }
+                    mutateTimeline(pausePlayback = false) { timeline ->
+                        timeline.copy(textOverlays = timeline.textOverlays + generated)
+                    }
+                    _uiState.update {
+                        it.copy(
+                            aiTaskState = AiTaskState.Idle,
+                            selectedTextId = generated.firstOrNull()?.id,
+                            statusBanner = "${generated.size} terjemahan suara ($targetLanguage) ditambahkan!"
+                        )
+                    }
+                }
+                is AiTaskResult.Error -> {
+                    _uiState.update { it.copy(aiTaskState = AiTaskState.Error(result.message)) }
+                }
+            }
+        }
+    }
+
     fun translateAllCaptions(targetLanguage: String) {
         val currentOverlays = _uiState.value.timeline.textOverlays
         if (currentOverlays.isEmpty()) {
@@ -870,7 +1084,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                         timeline.copy(
                             textOverlays = timeline.textOverlays.map { item ->
                                 val translated = map[item.id]
-                                if (translated != null) item.copy(text = translated) else item
+                                if (translated != null) {
+                                    item.copy(
+                                        originalText = item.originalText ?: item.text,
+                                        text = translated
+                                    )
+                                } else item
                             }
                         )
                     }
@@ -913,14 +1132,22 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun movePipOverlay(id: String, dxFraction: Float, dyFraction: Float) {
+    fun transformPipOverlay(
+        id: String,
+        dxFraction: Float,
+        dyFraction: Float,
+        scaleFactor: Float,
+        rotationDelta: Float
+    ) {
         _uiState.update { state ->
             val updated = state.timeline.copy(
                 pipOverlays = state.timeline.pipOverlays.map {
                     if (it.id == id) {
                         it.copy(
-                            xFraction = (it.xFraction + dxFraction).coerceIn(0.1f, 0.9f),
-                            yFraction = (it.yFraction + dyFraction).coerceIn(0.1f, 0.9f)
+                            xFraction = (it.xFraction + dxFraction).coerceIn(0.08f, 0.92f),
+                            yFraction = (it.yFraction + dyFraction).coerceIn(0.08f, 0.92f),
+                            scale = (it.scale * scaleFactor).coerceIn(0.16f, 0.95f),
+                            rotationDeg = ((it.rotationDeg + rotationDelta) % 360f)
                         )
                     } else it
                 }
@@ -949,61 +1176,98 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(selectedPipId = null) }
     }
 
-    fun setAudioTrackFromUri(uri: Uri) {
+    fun setAudioTrackFromUri(uri: Uri, role: AudioTrackRole = _uiState.value.selectedAudioRole) {
         viewModelScope.launch {
             val probed = MediaMetadataHelper.probeAudio(getApplication(), uri)
             val audio = AudioTrackItem(
                 uriString = probed.uriString,
                 title = probed.title,
-                durationMs = probed.durationMs
+                role = role,
+                durationMs = probed.durationMs,
+                trimStartMs = 0L,
+                trimEndMs = probed.durationMs,
+                vocalMode = if (role == AudioTrackRole.VOCAL) VocalSeparationMode.VOCAL_ONLY else VocalSeparationMode.ORIGINAL
             )
-            mutateTimeline(pausePlayback = false) { it.copy(audioTrack = audio) }
-            _uiState.update { it.copy(statusBanner = "Musik '${probed.title}' ditambahkan") }
-        }
-    }
-
-    fun updateAudioVolume(volume: Float) {
-        val existing = _uiState.value.timeline.audioTrack ?: return
-        mutateTimeline(pausePlayback = false) {
-            it.copy(audioTrack = existing.copy(volume = volume.coerceIn(0f, 1f)))
-        }
-    }
-
-    fun updateAudioVoiceEffect(effect: VoiceEffectPreset) {
-        val existing = _uiState.value.timeline.audioTrack ?: return
-        mutateTimeline(pausePlayback = false) {
-            it.copy(audioTrack = existing.copy(voiceEffect = effect))
-        }
-    }
-
-    fun updateAudioVocalMode(mode: VocalSeparationMode) {
-        val existing = _uiState.value.timeline.audioTrack ?: return
-        mutateTimeline(pausePlayback = false) {
-            it.copy(audioTrack = existing.copy(vocalMode = mode))
-        }
-    }
-
-    fun toggleAudioNoiseReduction() {
-        val existing = _uiState.value.timeline.audioTrack ?: return
-        mutateTimeline(pausePlayback = false) {
-            it.copy(audioTrack = existing.copy(noiseReduction = !existing.noiseReduction))
-        }
-    }
-
-    fun toggleAudioFade(fadeIn: Boolean? = null, fadeOut: Boolean? = null) {
-        val existing = _uiState.value.timeline.audioTrack ?: return
-        mutateTimeline(pausePlayback = false) {
-            it.copy(
-                audioTrack = existing.copy(
-                    fadeIn = fadeIn ?: existing.fadeIn,
-                    fadeOut = fadeOut ?: existing.fadeOut
+            mutateTimeline(pausePlayback = false) {
+                when (role) {
+                    AudioTrackRole.VOCAL -> it.copy(vocalTrack = audio)
+                    AudioTrackRole.MUSIC -> it.copy(musicTrack = audio)
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    selectedAudioRole = role,
+                    statusBanner = "${role.label}: '${probed.title}' ditambahkan"
                 )
+            }
+        }
+    }
+
+    private fun updateTrackByRole(
+        role: AudioTrackRole,
+        pausePlayback: Boolean = false,
+        transform: (AudioTrackItem) -> AudioTrackItem
+    ) {
+        mutateTimeline(pausePlayback = pausePlayback) { tl ->
+            when (role) {
+                AudioTrackRole.VOCAL -> tl.vocalTrack?.let { tl.copy(vocalTrack = transform(it)) } ?: tl
+                AudioTrackRole.MUSIC -> tl.musicTrack?.let { tl.copy(musicTrack = transform(it)) } ?: tl
+            }
+        }
+    }
+
+    fun updateAudioVolume(role: AudioTrackRole, volume: Float) {
+        updateTrackByRole(role) { it.copy(volume = volume.coerceIn(0f, 1f)) }
+    }
+
+    fun updateAudioTrim(role: AudioTrackRole, trimStartMs: Long, trimEndMs: Long) {
+        updateTrackByRole(role) { tr ->
+            val maxD = tr.durationMs.coerceAtLeast(1000L)
+            val s = trimStartMs.coerceIn(0L, (maxD - 400L).coerceAtLeast(0L))
+            val e = trimEndMs.coerceIn((s + 400L).coerceAtMost(maxD), maxD)
+            tr.copy(trimStartMs = s, trimEndMs = e)
+        }
+    }
+
+    fun shiftAudioOffset(role: AudioTrackRole, deltaMs: Long) {
+        val total = _uiState.value.timeline.totalDurationMs.coerceAtLeast(5000L)
+        updateTrackByRole(role) { tr ->
+            tr.copy(startOffsetMs = (tr.startOffsetMs + deltaMs).coerceIn(0L, total))
+        }
+    }
+
+    fun updateAudioVoiceEffect(role: AudioTrackRole, effect: VoiceEffectPreset) {
+        updateTrackByRole(role) { it.copy(voiceEffect = effect) }
+    }
+
+    fun updateAudioVocalMode(role: AudioTrackRole, mode: VocalSeparationMode) {
+        updateTrackByRole(role) { it.copy(vocalMode = mode) }
+    }
+
+    fun toggleAudioNoiseReduction(role: AudioTrackRole) {
+        updateTrackByRole(role) { it.copy(noiseReduction = !it.noiseReduction) }
+    }
+
+    fun toggleAudioDucking(role: AudioTrackRole) {
+        updateTrackByRole(role) { it.copy(autoDucking = !it.autoDucking) }
+    }
+
+    fun toggleAudioFade(role: AudioTrackRole, fadeIn: Boolean? = null, fadeOut: Boolean? = null) {
+        updateTrackByRole(role) {
+            it.copy(
+                fadeIn = fadeIn ?: it.fadeIn,
+                fadeOut = fadeOut ?: it.fadeOut
             )
         }
     }
 
-    fun removeAudioTrack() {
-        mutateTimeline(pausePlayback = false) { it.copy(audioTrack = null) }
+    fun removeAudioTrack(role: AudioTrackRole) {
+        mutateTimeline(pausePlayback = false) { tl ->
+            when (role) {
+                AudioTrackRole.VOCAL -> tl.copy(vocalTrack = null)
+                AudioTrackRole.MUSIC -> tl.copy(musicTrack = null)
+            }
+        }
     }
 
     fun setExportResolution(resolution: ExportResolution) {

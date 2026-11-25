@@ -186,10 +186,11 @@ fun EditorScreen(
                     onPlaybackEnded = { viewModel.setPlaying(false) },
                     onToggleMute = viewModel::togglePreviewMute,
                     onToggleFullscreen = { isFullscreenPreview = !isFullscreenPreview },
+                    onTransformClip = viewModel::transformSelectedClip,
                     onSelectText = viewModel::selectTextOverlay,
-                    onMoveText = viewModel::moveTextOverlayPosition,
+                    onTransformText = viewModel::transformTextOverlay,
                     onSelectPip = viewModel::selectPipOverlay,
-                    onMovePip = viewModel::movePipOverlay,
+                    onTransformPip = viewModel::transformPipOverlay,
                     modifier = Modifier.weight(if (isFullscreenPreview) 1f else 0.46f)
                 )
 
@@ -265,7 +266,9 @@ fun EditorScreen(
                         selectedClipIndex = uiState.selectedClipIndex,
                         selectedTextId = uiState.selectedTextId,
                         selectedPipId = uiState.selectedPipId,
+                        selectedAudioRole = uiState.selectedAudioRole,
                         timelineZoom = uiState.timelineZoom,
+                        onPinchZoom = viewModel::setTimelineZoom,
                         onSeekTo = { viewModel.seekTo(it, fromUser = true) },
                         onSelectClip = viewModel::selectClip,
                         onTrimClip = viewModel::updateSelectedClipTrim,
@@ -275,13 +278,15 @@ fun EditorScreen(
                         },
                         onSelectText = { id -> viewModel.selectTextOverlay(id) },
                         onSelectPip = { id -> viewModel.selectPipOverlay(id) },
+                        onSelectAudioRole = viewModel::selectAudioRole,
+                        onShiftAudioOffset = viewModel::shiftAudioOffset,
                         onAddMediaClick = {
                             appendMediaLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                             )
                         },
-                        onAddAudioClick = {
-                            viewModel.setActiveToolTab(EditorToolTab.AUDIO)
+                        onAddAudioClick = { role ->
+                            viewModel.selectAudioRole(role)
                         },
                         modifier = Modifier
                             .weight(0.36f)
@@ -293,6 +298,8 @@ fun EditorScreen(
                         onSplitClip = viewModel::splitClipAtPlayhead,
                         onTrimClip = viewModel::updateSelectedClipTrim,
                         onCropClip = viewModel::updateSelectedClipCrop,
+                        onSetPanZoom = viewModel::setSelectedClipPanZoom,
+                        onResetClipTransform = viewModel::resetSelectedClipTransform,
                         onSpeedChange = viewModel::updateSelectedClipSpeed,
                         onSpeedCurveChange = viewModel::updateSelectedClipSpeedCurve,
                         onToggleSmoothSlowMo = viewModel::toggleSelectedClipSmoothSlowMo,
@@ -304,11 +311,16 @@ fun EditorScreen(
                         onDuplicateClip = viewModel::duplicateSelectedClip,
                         onMoveClip = viewModel::moveSelectedClip,
                         onDeleteClip = viewModel::deleteSelectedClip,
+                        onSelectAudioRole = viewModel::selectAudioRole,
                         onPickAudio = { audioPickerLauncher.launch(arrayOf("audio/*")) },
+                        onSplitVocalAndMusic = viewModel::splitAudioIntoVocalAndMusicTracks,
                         onAudioVolumeChange = viewModel::updateAudioVolume,
+                        onAudioTrimChange = viewModel::updateAudioTrim,
+                        onShiftAudioOffset = viewModel::shiftAudioOffset,
                         onAudioVoiceEffectChange = viewModel::updateAudioVoiceEffect,
                         onAudioVocalModeChange = viewModel::updateAudioVocalMode,
                         onToggleAudioNoiseReduction = viewModel::toggleAudioNoiseReduction,
+                        onToggleAudioDucking = viewModel::toggleAudioDucking,
                         onClipVoiceEffectChange = viewModel::updateSelectedClipVoiceEffect,
                         onClipVocalModeChange = viewModel::updateSelectedClipVocalMode,
                         onToggleClipNoiseReduction = viewModel::toggleSelectedClipNoiseReduction,
@@ -320,8 +332,12 @@ fun EditorScreen(
                             viewModel.addTextOverlay(txt, fg, bg, styleId, useGradient, isSticker)
                         },
                         onUpdateSelectedText = viewModel::updateSelectedTextOverlay,
+                        onUpdateTextById = viewModel::updateTextOverlayById,
+                        onSelectText = viewModel::selectTextOverlay,
+                        onSeekTo = { viewModel.seekTo(it, fromUser = true) },
                         onDeleteSelectedText = viewModel::deleteSelectedTextOverlay,
                         onGenerateAutoCaptions = viewModel::generateAutoCaptions,
+                        onAutoTranscribeAndTranslate = viewModel::autoTranscribeAndTranslate,
                         onTranslateCaptions = viewModel::translateAllCaptions,
                         onPickPipOverlay = {
                             pipPickerLauncher.launch(
