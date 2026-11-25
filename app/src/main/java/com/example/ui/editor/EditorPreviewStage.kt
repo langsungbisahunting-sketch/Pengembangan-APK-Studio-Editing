@@ -1,0 +1,759 @@
+package com.example.ui.editor
+
+import android.content.Context
+import android.net.Uri
+import android.view.ViewGroup
+import androidx.annotation.OptIn
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
+import com.example.media.Media3EffectsFactory
+import com.example.media.VoiceEffectsAudioProcessor
+import com.example.model.BlendModePreset
+import com.example.model.CanvasFitMode
+import com.example.model.ProjectTimelineData
+import com.example.model.SpeedCurvePreset
+import com.example.model.TextAnimationType
+import com.example.model.TextFontStyle
+import com.example.model.VideoEffectPreset
+import com.example.model.interpolateKeyframes
+import com.example.ui.common.buildComposeColorMatrix
+import com.example.ui.common.formatTimecodeMs
+import com.example.ui.theme.ElectricCyan
+import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.ui.theme.NeonCoral
+import com.example.ui.theme.OutfitFontFamily
+import com.example.ui.theme.PlusJakartaFontFamily
+import com.example.ui.theme.StudioBorder
+import com.example.ui.theme.StudioCard
+import com.example.ui.theme.StudioObsidian
+import com.example.ui.theme.TextPrimary
+import com.example.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
+import kotlin.math.sin
+
+@OptIn(UnstableApi::class)
+@Composable
+fun EditorPreviewStage(
+    timeline: ProjectTimelineData,
+    currentPositionMs: Long,
+    isPlaying: Boolean,
+    isPreviewMuted: Boolean,
+    selectedTextId: String?,
+    selectedPipId: String?,
+    isFullscreen: Boolean,
+    onTogglePlayPause: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onPlaybackTick: (Long) -> Unit,
+    onPlaybackEnded: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleFullscreen: () -> Unit,
+    onSelectText: (String?) -> Unit,
+    onMoveText: (String, Float, Float) -> Unit,
+    onSelectPip: (String?) -> Unit,
+    onMovePip: (String, Float, Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val latestOnTick by rememberUpdatedState(onPlaybackTick)
+    val latestOnEnded by rememberUpdatedState(onPlaybackEnded)
+    val latestTimeline by rememberUpdatedState(timeline)
+    val latestIsPlaying by rememberUpdatedState(isPlaying)
+    val latestPosition by rememberUpdatedState(currentPositionMs)
+
+    val videoAudioProcessor = remember { VoiceEffectsAudioProcessor() }
+    val bgAudioProcessor = remember { VoiceEffectsAudioProcessor() }
+
+    val videoPlayer = remember {
+        val rf = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(videoAudioProcessor))
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(context, rf).build().apply {
+            repeatMode = Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val audioPlayer = remember {
+        val rf = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(bgAudioProcessor))
+                    .build()
+            }
+        }
+        ExoPlayer.Builder(context, rf).build().apply {
+            repeatMode = Player.REPEAT_MODE_ALL
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            videoPlayer.release()
+            audioPlayer.release()
+        }
+    }
+
+    val activeSlot = remember(timeline, currentPositionMs) {
+        timeline.findClipAt(currentPositionMs)
+    }
+    val activeClipIndex = activeSlot?.first ?: -1
+    val activeClip = timeline.clips.getOrNull(activeClipIndex)
+    val activeOffsetEffectiveMs = activeSlot?.second ?: 0L
+
+    var preparedClipSignature by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(
+        activeClip?.id,
+        activeClip?.uriString,
+        activeClip?.trimStartMs,
+        activeClip?.trimEndMs,
+        activeClip?.rotationDegrees,
+        activeClip?.isMirrored,
+        activeClip?.keyframes,
+        timeline.filterPreset,
+        timeline.videoEffect,
+        timeline.adjustments
+    ) {
+        if (activeClip == null || activeClip.isImage) {
+            videoPlayer.pause()
+            return@LaunchedEffect
+        }
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.parse(activeClip.uriString))
+            .setClippingConfiguration(
+                MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(activeClip.trimStartMs)
+                    .setEndPositionMs(activeClip.trimEndMs.coerceAtLeast(activeClip.trimStartMs + 300L))
+                    .build()
+            )
+            .build()
+        val effects = Media3EffectsFactory.buildClipVideoEffects(
+            clip = activeClip,
+            filter = timeline.filterPreset,
+            videoEffect = timeline.videoEffect,
+            adjustments = timeline.adjustments
+        )
+        videoPlayer.setVideoEffects(effects)
+        videoPlayer.setMediaItem(mediaItem)
+        videoPlayer.prepare()
+        val targetPlayerPos = (activeOffsetEffectiveMs * activeClip.effectiveSpeedAverage).toLong()
+            .coerceIn(0L, activeClip.trimmedSourceDurationMs)
+        videoPlayer.seekTo(targetPlayerPos)
+        preparedClipSignature++
+    }
+
+    // Sync clip speed, curve, voice pitch, DSP processor, and volume
+    LaunchedEffect(
+        activeClip?.speed,
+        activeClip?.speedCurve,
+        activeClip?.volume,
+        activeClip?.voiceEffect,
+        activeClip?.vocalMode,
+        activeClip?.noiseReduction,
+        activeOffsetEffectiveMs,
+        isPreviewMuted,
+        preparedClipSignature
+    ) {
+        if (activeClip != null && !activeClip.isImage) {
+            val progress = (activeOffsetEffectiveMs.toFloat() / activeClip.effectiveDurationMs.coerceAtLeast(1L))
+                .coerceIn(0f, 1f)
+            val liveSpeed = if (activeClip.speedCurve == SpeedCurvePreset.NORMAL) {
+                activeClip.speed.coerceIn(0.1f, 8.0f)
+            } else {
+                activeClip.speedCurve.speedMultiplierAt(progress)
+            }
+            videoAudioProcessor.voiceEffect = activeClip.voiceEffect
+            videoAudioProcessor.vocalMode = activeClip.vocalMode
+            videoAudioProcessor.noiseReduction = activeClip.noiseReduction
+            videoPlayer.playbackParameters = PlaybackParameters(
+                liveSpeed,
+                activeClip.voiceEffect.pitchMultiplier
+            )
+            videoPlayer.volume = if (isPreviewMuted) 0f else activeClip.volume.coerceIn(0f, 1f)
+        }
+    }
+
+    // Sync background audio track
+    LaunchedEffect(timeline.audioTrack?.uriString) {
+        val bg = timeline.audioTrack
+        if (bg == null) {
+            audioPlayer.stop()
+            audioPlayer.clearMediaItems()
+        } else {
+            audioPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(bg.uriString)))
+            audioPlayer.prepare()
+        }
+    }
+
+    LaunchedEffect(
+        timeline.audioTrack?.volume,
+        timeline.audioTrack?.voiceEffect,
+        timeline.audioTrack?.vocalMode,
+        timeline.audioTrack?.noiseReduction,
+        isPreviewMuted
+    ) {
+        val bg = timeline.audioTrack
+        if (bg != null) {
+            bgAudioProcessor.voiceEffect = bg.voiceEffect
+            bgAudioProcessor.vocalMode = bg.vocalMode
+            bgAudioProcessor.noiseReduction = bg.noiseReduction
+            audioPlayer.playbackParameters = PlaybackParameters(1.0f, bg.voiceEffect.pitchMultiplier)
+            audioPlayer.volume = if (isPreviewMuted) 0f else bg.volume.coerceIn(0f, 1f)
+        } else {
+            audioPlayer.volume = 0f
+        }
+    }
+
+    LaunchedEffect(currentPositionMs, isPlaying) {
+        if (!isPlaying && activeClip != null && !activeClip.isImage) {
+            val targetPlayerPos = (activeOffsetEffectiveMs * activeClip.effectiveSpeedAverage).toLong()
+                .coerceIn(0L, activeClip.trimmedSourceDurationMs)
+            if (kotlin.math.abs(videoPlayer.currentPosition - targetPlayerPos) > 90L) {
+                videoPlayer.seekTo(targetPlayerPos)
+            }
+        }
+        if (!isPlaying && timeline.audioTrack != null) {
+            val dur = timeline.audioTrack.durationMs.coerceAtLeast(1000L)
+            audioPlayer.seekTo(currentPositionMs % dur)
+        }
+    }
+
+    LaunchedEffect(isPlaying, activeClipIndex, preparedClipSignature) {
+        if (isPlaying && activeClip != null) {
+            if (activeClip.isImage) {
+                videoPlayer.pause()
+            } else {
+                videoPlayer.play()
+            }
+            if (latestTimeline.audioTrack != null) {
+                val dur = latestTimeline.audioTrack!!.durationMs.coerceAtLeast(1000L)
+                audioPlayer.seekTo(latestPosition % dur)
+                audioPlayer.play()
+            }
+
+            var lastFrameTime = System.currentTimeMillis()
+            while (latestIsPlaying) {
+                delay(33L)
+                val now = System.currentTimeMillis()
+                val delta = (now - lastFrameTime).coerceIn(1L, 120L)
+                lastFrameTime = now
+
+                val tl = latestTimeline
+                val totalDur = tl.totalDurationMs
+                val currentSlot = tl.findClipAt(latestPosition)
+                val currentClip = currentSlot?.let { tl.clips.getOrNull(it.first) }
+
+                val nextPos = if (currentClip != null && !currentClip.isImage && videoPlayer.isPlaying) {
+                    val clipStart = tl.clipStartPositionMs(currentSlot.first)
+                    val playerEffective = (videoPlayer.currentPosition / currentClip.effectiveSpeedAverage).toLong()
+                    (clipStart + playerEffective).coerceAtLeast(latestPosition)
+                } else {
+                    latestPosition + delta
+                }
+
+                if (nextPos >= totalDur) {
+                    latestOnTick(totalDur)
+                    latestOnEnded()
+                    break
+                } else {
+                    latestOnTick(nextPos)
+                }
+            }
+        } else {
+            videoPlayer.pause()
+            audioPlayer.pause()
+        }
+    }
+
+    val pulseTransition = rememberInfiniteTransition(label = "stage_fx")
+    val fxPhase by pulseTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 6.283f,
+        animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Restart),
+        label = "fx_phase"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(StudioObsidian),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (timeline.clips.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = StudioCard,
+                    border = BorderStroke(1.dp, StudioBorder),
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Filled.Movie, null, tint = TextSecondary, modifier = Modifier.size(36.dp))
+                        Text("Belum ada klip di timeline", color = TextSecondary)
+                    }
+                }
+            } else {
+                val ratio = timeline.aspectRatio.widthRatio / timeline.aspectRatio.heightRatio
+                val clipKeyframe = remember(activeClip?.keyframes, activeOffsetEffectiveMs) {
+                    activeClip?.let { interpolateKeyframes(it.keyframes, activeOffsetEffectiveMs) }
+                }
+
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(ratio, matchHeightConstraintsFirst = ratio < 1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (activeClip?.chromaKey?.enabled == true || activeClip?.chromaKey?.autoRemoveBg == true) {
+                                Color(0xFF151924)
+                            } else {
+                                Color(timeline.canvasBgHex)
+                            }
+                        )
+                        .border(1.dp, StudioBorder, RoundedCornerShape(12.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures {
+                                onSelectText(null)
+                                onSelectPip(null)
+                            }
+                        }
+                ) {
+                    val stageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }.coerceAtLeast(1f)
+                    val stageHeightPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
+
+                    // Optional Blur Background Fill
+                    if (timeline.canvasFitMode == CanvasFitMode.BLUR_BG && activeClip != null) {
+                        AsyncImage(
+                            model = Uri.parse(activeClip.uriString),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(20.dp)
+                                .alpha(0.45f)
+                        )
+                    }
+
+                    val mediaModifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (timeline.videoEffect == VideoEffectPreset.BLUR) Modifier.blur(6.dp) else Modifier
+                        )
+                        .graphicsLayer {
+                            if (activeClip?.isImage == true && clipKeyframe != null) {
+                                scaleX = clipKeyframe.scale * (if (activeClip.isMirrored) -1f else 1f)
+                                scaleY = clipKeyframe.scale
+                                rotationZ = activeClip.rotationDegrees.toFloat() + clipKeyframe.rotationDeg
+                                translationX = clipKeyframe.xOffset * stageWidthPx
+                                translationY = clipKeyframe.yOffset * stageHeightPx
+                                alpha = clipKeyframe.opacity
+                            } else if (clipKeyframe != null) {
+                                alpha = clipKeyframe.opacity
+                            }
+                        }
+
+                    if (activeClip?.isImage == true) {
+                        val colorMatrix = remember(timeline.filterPreset, timeline.adjustments) {
+                            buildComposeColorMatrix(timeline.filterPreset, timeline.adjustments)
+                        }
+                        AsyncImage(
+                            model = Uri.parse(activeClip.uriString),
+                            contentDescription = activeClip.displayName,
+                            contentScale = ContentScale.Fit,
+                            colorFilter = ColorFilter.colorMatrix(colorMatrix),
+                            modifier = mediaModifier
+                        )
+                    } else {
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    useController = false
+                                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                    layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                    player = videoPlayer
+                                }
+                            },
+                            update = { view ->
+                                if (view.player !== videoPlayer) {
+                                    view.player = videoPlayer
+                                }
+                            },
+                            modifier = mediaModifier
+                        )
+                    }
+
+                    // Sparkle / Vignette / Chroma Badge Overlays
+                    if (timeline.videoEffect == VideoEffectPreset.SPARKLE) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            for (i in 0..8) {
+                                val px = ((i * 73 + 29) % 100) / 100f * size.width
+                                val py = ((i * 41 + 17) % 100) / 100f * size.height
+                                val r = (3f + 4f * kotlin.math.abs(sin(fxPhase + i))).dp.toPx()
+                                drawCircle(
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    radius = r,
+                                    center = Offset(px, py)
+                                )
+                            }
+                        }
+                    }
+
+                    if (timeline.adjustments.vignette > 0.02f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = timeline.adjustments.vignette.coerceIn(0f, 0.85f))
+                                        )
+                                    )
+                                )
+                        )
+                    }
+
+                    if (activeClip?.chromaKey?.enabled == true || activeClip?.chromaKey?.autoRemoveBg == true) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.68f),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = if (activeClip.chromaKey.autoRemoveBg) "Auto BG Aktif" else "Chroma Key Aktif",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ElectricCyan,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    // Active PiP Overlays
+                    val visiblePips = timeline.pipOverlays.filter {
+                        currentPositionMs in it.startMs..it.endMs
+                    }
+                    visiblePips.forEach { pip ->
+                        val pipSelected = pip.id == selectedPipId
+                        val pipWidth = maxWidth * pip.scale.coerceIn(0.18f, 0.75f)
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        x = ((pip.xFraction * stageWidthPx) - (stageWidthPx * pip.scale * 0.5f)).roundToInt(),
+                                        y = ((pip.yFraction * stageHeightPx) - (stageWidthPx * pip.scale * 0.5f)).roundToInt()
+                                    )
+                                }
+                                .size(pipWidth)
+                                .clip(RoundedCornerShape(8.dp))
+                                .alpha(pip.opacity)
+                                .then(
+                                    if (pipSelected) Modifier.border(2.dp, NeonCoral, RoundedCornerShape(8.dp))
+                                    else Modifier.border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                )
+                                .pointerInput(pip.id) {
+                                    detectTapGestures { onSelectPip(pip.id) }
+                                }
+                                .pointerInput(pip.id, stageWidthPx, stageHeightPx) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        onMovePip(
+                                            pip.id,
+                                            dragAmount.x / stageWidthPx,
+                                            dragAmount.y / stageHeightPx
+                                        )
+                                    }
+                                }
+                        ) {
+                            AsyncImage(
+                                model = Uri.parse(pip.uriString),
+                                contentDescription = pip.displayName,
+                                contentScale = ContentScale.Crop,
+                                colorFilter = when (pip.blendMode) {
+                                    BlendModePreset.SCREEN -> ColorFilter.tint(Color.White.copy(alpha = 0.2f), BlendMode.Screen)
+                                    BlendModePreset.MULTIPLY -> ColorFilter.tint(Color.Gray.copy(alpha = 0.3f), BlendMode.Multiply)
+                                    BlendModePreset.OVERLAY -> ColorFilter.tint(ElectricCyan.copy(alpha = 0.15f), BlendMode.Overlay)
+                                    BlendModePreset.NORMAL -> null
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    // Active Text Overlays with Font Style, Shadow, and Animations
+                    val visibleTexts = timeline.textOverlays.filter {
+                        currentPositionMs in it.startMs..it.endMs
+                    }
+                    visibleTexts.forEach { item ->
+                        val isSelected = item.id == selectedTextId
+                        val elapsed = (currentPositionMs - item.startMs).coerceAtLeast(0L)
+                        val animAlpha = when (item.animation) {
+                            TextAnimationType.FADE -> (elapsed / 400f).coerceIn(0f, 1f)
+                            else -> 1f
+                        }
+                        val animScale = when (item.animation) {
+                            TextAnimationType.POP -> (0.7f + 0.3f * (elapsed / 300f).coerceIn(0f, 1f))
+                            TextAnimationType.PULSE_LOOP -> 0.94f + 0.08f * sin(fxPhase)
+                            else -> 1f
+                        }
+                        val animOffsetY = when (item.animation) {
+                            TextAnimationType.SLIDE_UP -> (1f - (elapsed / 350f).coerceIn(0f, 1f)) * 28f
+                            else -> 0f
+                        }
+                        val fontFamily = when (item.fontStyle) {
+                            TextFontStyle.MODERN -> OutfitFontFamily
+                            TextFontStyle.CLEAN -> PlusJakartaFontFamily
+                            TextFontStyle.MONO -> JetBrainsMonoFontFamily
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        x = ((item.xFraction * stageWidthPx) - 70f).roundToInt(),
+                                        y = ((item.yFraction * stageHeightPx) - 24f + animOffsetY).roundToInt()
+                                    )
+                                }
+                                .graphicsLayer {
+                                    alpha = animAlpha
+                                    scaleX = animScale
+                                    scaleY = animScale
+                                }
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(item.bgColorHex))
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(1.5.dp, ElectricCyan, RoundedCornerShape(8.dp))
+                                    } else Modifier
+                                )
+                                .pointerInput(item.id) {
+                                    detectTapGestures { onSelectText(item.id) }
+                                }
+                                .pointerInput(item.id, stageWidthPx, stageHeightPx) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        onMoveText(
+                                            item.id,
+                                            dragAmount.x / stageWidthPx,
+                                            dragAmount.y / stageHeightPx
+                                        )
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = item.text,
+                                style = TextStyle(
+                                    fontFamily = fontFamily,
+                                    fontSize = (item.fontSizeSp * 0.72f).sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(item.colorHex),
+                                    shadow = if (item.hasShadow) {
+                                        Shadow(Color.Black.copy(alpha = 0.85f), Offset(2f, 2f), 4f)
+                                    } else null
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Transport Controls Strip
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = formatTimecodeMs(currentPositionMs),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                    color = TextPrimary
+                )
+                Text(
+                    text = " / ${formatTimecodeMs(timeline.totalDurationMs)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                    color = TextSecondary
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(
+                    onClick = { onSeekTo(0L) },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = "Ke Awal",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Surface(
+                    onClick = onTogglePlayPause,
+                    shape = CircleShape,
+                    color = ElectricCyan,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .testTag("editor_play_pause_button")
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (isPlaying) "Jeda" else "Putar",
+                            tint = Color(0xFF041318),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onToggleMute,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("editor_mute_button")
+                ) {
+                    Icon(
+                        imageVector = if (isPreviewMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
+                        contentDescription = if (isPreviewMuted) "Suara Aktif" else "Bisukan Preview",
+                        tint = if (isPreviewMuted) TextSecondary else ElectricCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onToggleFullscreen,
+                modifier = Modifier
+                    .size(48.dp)
+                    .testTag("editor_fullscreen_button")
+            ) {
+                Icon(
+                    imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                    contentDescription = "Layar Penuh",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}

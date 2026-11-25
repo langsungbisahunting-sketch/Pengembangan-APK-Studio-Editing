@@ -1,0 +1,6 @@
+{
+  "name": "VeloCut",
+  "description": "Studio editing video mobile bergaya CapCut dengan timeline multi-track, potong dan bagi klip, filter warna, kontrol kecepatan, overlay teks, musik latar, dan ekspor MP4.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
